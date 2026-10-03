@@ -37,6 +37,9 @@ export async function updateSession(request: NextRequest) {
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));
 
   if (!signedIn && !isPublic) {
+    // Server Action calls check the session themselves and return "You're signed out";
+    // redirecting them to /login would only show a confusing generic error.
+    if (request.headers.has("next-action")) return response;
     if (path.startsWith("/api/")) {
       return NextResponse.json({ error: "You're signed out. Please log in again." }, { status: 401 });
     }

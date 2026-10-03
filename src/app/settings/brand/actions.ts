@@ -11,7 +11,7 @@ const SIGNED_OUT: ActionState = { error: "You're signed out. Please log in again
 // Empty input → null; otherwise a non-negative number.
 const optionalNumber = (max?: number) =>
   z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? Number(v.replace(/,/g, "")) : v),
+    (v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? Number(v.replace(/[,%\s]/g, "")) : v),
     z
       .number({ error: "Use numbers only." })
       .min(0, "Can't be negative.")

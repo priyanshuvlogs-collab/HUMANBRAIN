@@ -82,8 +82,9 @@ const text = z.preprocess(
   z.string(),
 ).catch("");
 
+/** Text that may be absent: "", "null", "none", "N/A", "-" all become null. */
 const optionalText = z.preprocess(
-  (v) => (typeof v === "string" && v.trim() !== "" && v.trim().toLowerCase() !== "null" ? v : null),
+  (v) => (typeof v === "string" && !/^\s*(null|none|n\/?a|-+)?\s*$/i.test(v) ? v : null),
   z.string().nullable(),
 );
 
@@ -97,13 +98,23 @@ const lenientBool = z
 const PERSONA_ACTIONS = ["scroll", "like", "comment", "save", "share", "dm", "click"] as const;
 export type PersonaAction = (typeof PERSONA_ACTIONS)[number];
 
+const ACTION_PATTERNS: [PersonaAction, RegExp][] = [
+  ["click", /\bclick(s|ed|ing)?\b/],
+  ["share", /\bshar(e|es|ed|ing)\b/],
+  ["save", /\bsav(e|es|ed|ing)\b/],
+  ["comment", /\bcomment(s|ed|ing)?\b/],
+  ["like", /\blik(e|es|ed|ing)\b/],
+  ["scroll", /\bscroll(s|ed|ing)?\b/],
+];
+
 const personaAction = z
   .preprocess((v) => {
     if (typeof v !== "string") return v;
-    const s = v.toLowerCase();
+    const s = v.trim().toLowerCase();
+    if ((PERSONA_ACTIONS as readonly string[]).includes(s)) return s;
     if (/\bdms?\b|message/.test(s)) return "dm";
-    for (const action of PERSONA_ACTIONS) if (s.includes(action)) return action;
-    return s;
+    // Whole words only, so "likely to save" is a save, not a like.
+    return ACTION_PATTERNS.find(([, pattern]) => pattern.test(s))?.[0] ?? s;
   }, z.enum(PERSONA_ACTIONS))
   .catch("scroll");
 
@@ -113,8 +124,9 @@ export type ChainStatus = (typeof CHAIN_STATUSES)[number];
 const chainStatus = z
   .preprocess((v) => {
     if (typeof v !== "string") return v;
-    const s = v.toLowerCase();
-    if (/break|broken|fail|lost|no\b/.test(s)) return "break";
+    const s = v.trim().toLowerCase();
+    if ((CHAIN_STATUSES as readonly string[]).includes(s)) return s;
+    if (/\b(break|breaks|broken|fail|fails|failed|lost)\b/.test(s)) return "break";
     if (/weak|partial|shaky|maybe/.test(s)) return "weak";
     if (/pass|ok|strong|yes|holds/.test(s)) return "pass";
     return s;

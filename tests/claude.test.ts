@@ -44,10 +44,27 @@ describe("runReview", () => {
   it("re-sends the original question when the first reply had no text", async () => {
     const call = vi
       .fn<ClaudeCaller>()
-      .mockResolvedValueOnce(reply("", { stop_reason: "max_tokens" }))
+      .mockResolvedValueOnce(reply(""))
       .mockResolvedValueOnce(reply(SAMPLE_REVIEW_REPLY));
     await runReview({ ...input, call });
     expect(call.mock.calls[1][0].messages).toEqual([{ role: "user", content: "POST" }]);
+  });
+
+  it("doesn't pay for an identical retry when all tokens went to thinking", async () => {
+    const call = vi.fn<ClaudeCaller>().mockResolvedValue(reply("", { stop_reason: "max_tokens" }));
+    await expect(runReview({ ...input, call })).rejects.toThrow(/CLAUDE_EFFORT/);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it("a reply cut off mid-JSON gets the JSON-only retry", async () => {
+    const cut = SAMPLE_REVIEW_REPLY.slice(0, SAMPLE_REVIEW_REPLY.indexOf('"alternative_hooks"'));
+    const call = vi
+      .fn<ClaudeCaller>()
+      .mockResolvedValueOnce(reply(cut, { stop_reason: "max_tokens" }))
+      .mockResolvedValueOnce(reply(JSON_ONLY));
+    const result = await runReview({ ...input, call });
+    expect(result.retried).toBe(true);
+    expect(call.mock.calls[1][0].messages).toHaveLength(3);
   });
 
   it("gives up after one retry", async () => {

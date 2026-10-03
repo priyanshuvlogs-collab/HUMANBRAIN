@@ -56,7 +56,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
           <span>·</span>
           <time dateTime={review.created_at}>{new Date(review.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</time>
         </div>
-        <p className="text-lg font-semibold leading-snug text-zinc-900 sm:text-xl">“{post.hook}”</p>
+        <p className="text-lg font-semibold leading-snug break-words text-zinc-900 sm:text-xl">“{post.hook}”</p>
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <span className={`text-5xl font-bold tabular-nums ${scoreColor(total)}`}>{total}</span>
@@ -89,7 +89,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
       {!view ? (
         <div className="card">
           <p className="mb-3 text-sm text-zinc-600">This review was saved in an older format, so only the full text is shown.</p>
-          <pre className="whitespace-pre-wrap text-sm text-zinc-800">{review.raw_response}</pre>
+          <pre className="whitespace-pre-wrap break-words text-sm text-zinc-800">{review.raw_response}</pre>
         </div>
       ) : (
         <>
@@ -169,7 +169,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
               <div className="card grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Original</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-500 line-through decoration-zinc-300">
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-500 line-through decoration-zinc-300">
                     {view.rewrittenSection.original}
                   </p>
                 </div>
@@ -178,7 +178,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
                     <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Rewrite</p>
                     <CopyButton text={view.rewrittenSection.rewrite} />
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-900">{view.rewrittenSection.rewrite}</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">{view.rewrittenSection.rewrite}</p>
                 </div>
                 {view.rewrittenSection.why && <p className="text-xs text-zinc-600 md:col-span-2">{view.rewrittenSection.why}</p>}
               </div>
@@ -188,7 +188,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
           {view.improvedCta && (
             <Section title="Improved CTA">
               <div className="card flex flex-col gap-3 sm:flex-row sm:items-center">
-                <p className="flex-1 text-sm font-medium text-zinc-900">{view.improvedCta}</p>
+                <p className="min-w-0 flex-1 break-words text-sm font-medium text-zinc-900">{view.improvedCta}</p>
                 <CopyButton text={view.improvedCta} />
               </div>
             </Section>
@@ -196,7 +196,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
 
           <details className="card">
             <summary className="cursor-pointer text-sm font-semibold">Full analysis</summary>
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-zinc-800">{review.raw_response}</pre>
+            <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm text-zinc-800">{review.raw_response}</pre>
           </details>
         </>
       )}
@@ -206,7 +206,7 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
           <ul className="card divide-y divide-zinc-100 p-0 sm:p-0">
             {versions.map((v) => (
               <li key={v.reviewId} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
-                <p className="flex-1 text-sm">
+                <p className="min-w-0 flex-1 break-words text-sm">
                   <span className={`mr-2 font-bold tabular-nums ${scoreColor(v.totalScore)}`}>{v.totalScore}</span>
                   {v.hook}
                 </p>

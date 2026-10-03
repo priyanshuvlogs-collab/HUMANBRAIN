@@ -13,7 +13,7 @@ const ACTION_LABELS: Record<string, string> = {
 export default function PersonaCard({ persona }: { persona: ReviewView["personas"][number] }) {
   const converted = persona.action === "dm" || persona.action === "click";
   return (
-    <div className="card flex flex-col gap-3">
+    <div className="card flex min-w-0 flex-col gap-3 break-words">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold">{persona.name}</h3>
         <span

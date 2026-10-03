@@ -31,7 +31,7 @@ function Column({ label, data, other }: { label: string; data: LoadedReview; oth
           Open full review
         </Link>
       </div>
-      <p className="min-h-12 font-semibold leading-snug">“{data.post.hook}”</p>
+      <p className="min-h-12 font-semibold leading-snug break-words">“{data.post.hook}”</p>
       <div className="flex items-baseline gap-2">
         <span className={`text-4xl font-bold tabular-nums ${scoreColor(total)}`}>{total}</span>
         <span className="text-zinc-400">/100</span>

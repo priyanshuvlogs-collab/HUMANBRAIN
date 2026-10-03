@@ -57,6 +57,28 @@ describe("reviewSchema leniency", () => {
     expect(r.conversionChain.map((s) => s.status).slice(0, 3)).toEqual(["break", "pass", "weak"]);
   });
 
+  it("matches whole words: 'Likely to save' is a save, a status with 'no' in it isn't a break", () => {
+    const data = base();
+    data.personas[0].action = "Likely to save it";
+    data.personas[1].action = "Shared it with a friend";
+    data.personas[2].action = "Clicked the link";
+    data.conversion_chain[0].status = "No clear issue";
+    data.conversion_chain[1].status = "Not quite — weak";
+    const r = reviewSchema.parse(data);
+    expect(r.personas.map((p) => p.action).slice(0, 3)).toEqual(["save", "share", "click"]);
+    expect(r.conversionChain[0].status).toBe("weak");
+    expect(r.conversionChain[1].status).toBe("weak");
+  });
+
+  it("treats 'None' / 'N/A' as empty for break point and stopped-at", () => {
+    const data = base();
+    data.break_point = "None";
+    data.personas[0].stopped_at = "N/A";
+    const r = reviewSchema.parse(data);
+    expect(r.breakPoint).toBeNull();
+    expect(r.personas[0].stoppedAt).toBeNull();
+  });
+
   it("fills missing display-only fields with defaults", () => {
     const data = base();
     delete data.first_impression;

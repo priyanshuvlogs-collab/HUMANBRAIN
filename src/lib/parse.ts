@@ -5,16 +5,21 @@ export type ParseResult =
   | { ok: false; problem: string };
 
 /**
- * Pull the JSON object out of the model's reply.
- * Prefers the LAST ```json fenced block (the brain asks for it at the end);
- * falls back to the last balanced {...} object in the text.
+ * Possible JSON objects in the model's reply, best guess first:
+ * the LAST ```json fenced block (the brain asks for it at the end), then the last
+ * balanced {...} object — which still works when a string inside the JSON contains ```.
  */
-export function extractJsonText(reply: string): string | null {
+export function jsonCandidates(reply: string): string[] {
   const fenced = [...reply.matchAll(/```(?:json|JSON)?[ \t]*\r?\n([\s\S]*?)```/g)]
     .map((m) => m[1].trim())
     .filter((block) => block.startsWith("{"));
-  if (fenced.length > 0) return fenced[fenced.length - 1];
-  return lastBalancedObject(reply);
+  const candidates = [fenced.at(-1), lastBalancedObject(reply)].filter((c): c is string => Boolean(c));
+  return [...new Set(candidates)];
+}
+
+/** The most likely JSON text in the reply (or null). */
+export function extractJsonText(reply: string): string | null {
+  return jsonCandidates(reply)[0] ?? null;
 }
 
 /** Finds the last top-level {...} in the text, respecting strings and escapes. */
@@ -46,16 +51,21 @@ function lastBalancedObject(text: string): string | null {
 
 /** Extract → JSON.parse → zod. Returns a problem description suitable for the retry prompt. */
 export function parseReviewReply(reply: string): ParseResult {
-  const jsonText = extractJsonText(reply);
-  if (!jsonText) return { ok: false, problem: "No JSON block was found at the end of the reply." };
+  const candidates = jsonCandidates(reply);
+  if (candidates.length === 0) return { ok: false, problem: "No JSON block was found at the end of the reply." };
 
   let data: unknown;
-  try {
-    data = JSON.parse(jsonText);
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : "invalid JSON";
-    return { ok: false, problem: `The JSON block is not valid JSON (${detail}).` };
+  let parseError = "";
+  for (const candidate of candidates) {
+    try {
+      data = JSON.parse(candidate);
+      parseError = "";
+      break;
+    } catch (err) {
+      parseError ||= err instanceof Error ? err.message : "invalid JSON";
+    }
   }
+  if (parseError) return { ok: false, problem: `The JSON block is not valid JSON (${parseError}).` };
 
   const result = reviewSchema.safeParse(data);
   if (!result.success) return { ok: false, problem: describeIssues(result.error) };

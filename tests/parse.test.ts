@@ -42,6 +42,14 @@ describe("parseReviewReply", () => {
     expect(r.firstImpression.stopsScroll).toBe(true);
   });
 
+  it("still parses when a string inside the JSON contains triple backticks", () => {
+    const data = sampleJson();
+    data.rewritten_section.rewrite = "Try this:\n```\ncode here\n```\nand wrap it in ``` too";
+    const result = parseReviewReply(fence(data));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.review.rewrittenSection?.rewrite).toContain("code here");
+  });
+
   it("fails when there is no JSON block", () => {
     const result = parseReviewReply("Great post! 8/10.");
     expect(result).toEqual({ ok: false, problem: "No JSON block was found at the end of the reply." });

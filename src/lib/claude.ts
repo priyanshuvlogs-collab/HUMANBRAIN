@@ -46,7 +46,9 @@ export type ReviewRunResult = {
 export const TOTAL_BUDGET_MS = 270_000;
 // Don't start the JSON retry unless there's at least this much time left.
 export const MIN_RETRY_MS = 60_000;
-const MAX_TOKENS = 16_000;
+// Thinking tokens count toward this limit and can't be switched off on current models,
+// so leave plenty of room (we stream, and the time budget above still caps wall-clock time).
+const MAX_TOKENS = 64_000;
 
 // Models that accept server-side refusal fallback ("fallbacks: 'default'").
 const FALLBACK_MODELS = new Set([
@@ -63,16 +65,16 @@ export function getModel(): string {
   return process.env.CLAUDE_MODEL?.trim() || "claude-sonnet-5-5";
 }
 
-/** CLAUDE_EFFORT: low | medium (default) | high | xhigh | max | off (= don't send it). */
+/** CLAUDE_EFFORT: low | medium (default) | high | xhigh | max | off (= use the model's own default). */
 export function getEffort(): Effort | null {
   const value = process.env.CLAUDE_EFFORT?.trim().toLowerCase();
   if (value === "off") return null;
   return (EFFORTS as readonly string[]).includes(value ?? "") ? (value as Effort) : "medium";
 }
 
-/** Mock mode returns a recorded reply instead of calling Claude. Never allowed on the live site. */
+/** Mock mode returns a recorded reply instead of calling Claude. Never allowed on Vercel deployments. */
 export function isMockMode(): boolean {
-  return process.env.OFFER_BRAIN_MOCK_AI === "true" && process.env.VERCEL_ENV !== "production";
+  return process.env.OFFER_BRAIN_MOCK_AI === "true" && !process.env.VERCEL;
 }
 
 let client: Anthropic | null = null;
@@ -182,6 +184,13 @@ export async function runReview(input: {
   const first = await callWithinDeadline([userTurn]);
   assertNotRefused(first);
   const firstText = textOf(first);
+  if (!firstText && first.stop_reason === "max_tokens") {
+    // Asking the same question again would just burn the same budget.
+    throw new ReviewError(
+      "Claude used its whole answer budget on thinking. Set CLAUDE_EFFORT to a lower level (e.g. medium or low) and try again.",
+      502,
+    );
+  }
   const firstParse = parseReviewReply(firstText);
   if (firstParse.ok) {
     return { review: firstParse.review, rawResponse: firstText, model: first.model, usage, retried: false };
@@ -194,8 +203,8 @@ export async function runReview(input: {
     );
   }
 
-  // An empty assistant turn is rejected by the API (e.g. when every token went to thinking),
-  // so in that case simply ask the original question again.
+  // An empty assistant turn is rejected by the API, so if the first reply had no text
+  // (and wasn't cut off), simply ask the original question again.
   const retryMessages: BetaMessageParam[] = firstText
     ? [
         userTurn,

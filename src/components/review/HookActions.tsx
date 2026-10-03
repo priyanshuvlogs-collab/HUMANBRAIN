@@ -19,7 +19,7 @@ export default function HookActions({ postId, reviewId, hooks }: { postId: strin
       <ol className="space-y-2">
         {hooks.map((hook, i) => (
           <li key={i} className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 sm:flex-row sm:items-center">
-            <p className="flex-1 text-sm text-zinc-900">
+            <p className="min-w-0 flex-1 break-words text-sm text-zinc-900">
               <span className="mr-2 font-semibold text-violet-700">{i + 1}.</span>
               {hook}
             </p>

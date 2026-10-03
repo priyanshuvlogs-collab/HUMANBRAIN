@@ -27,7 +27,8 @@ export default function ReviewLoading({ title = "Reviewing your post" }: { title
         <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
         <p className="font-semibold">{title}</p>
         <p className="mt-1 min-h-10 text-sm text-zinc-600">{message}</p>
-        <p className="mt-3 text-xs text-zinc-500">
+        {/* aria-hidden: don't make screen readers re-read the overlay every second */}
+        <p className="mt-3 text-xs text-zinc-500" aria-hidden="true">
           {seconds}s · usually 20–60 seconds. You can keep this tab open; the result is saved automatically.
         </p>
       </div>

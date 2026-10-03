@@ -12,11 +12,11 @@ const LINKS = [
 export default function Nav({ email }: { email: string | null }) {
   return (
     <header className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <Link href="/" className="shrink-0 text-lg font-bold tracking-tight text-violet-700">
           Offer Brain
         </Link>
-        <nav className="-mx-1 flex flex-1 gap-1 overflow-x-auto text-sm">
+        <nav className="order-last -mx-2 flex w-full flex-wrap gap-1 text-sm sm:order-none sm:mx-0 sm:w-auto sm:flex-1">
           {LINKS.map((l) => (
             <Link
               key={l.href}
@@ -27,7 +27,7 @@ export default function Nav({ email }: { email: string | null }) {
             </Link>
           ))}
         </nav>
-        <form action={signOut} className="shrink-0">
+        <form action={signOut} className="ml-auto shrink-0 sm:ml-0">
           <button className="text-sm text-zinc-500 hover:text-zinc-900" title={email ?? undefined}>
             Sign out
           </button>

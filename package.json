@@ -14,7 +14,8 @@
     "db:start": "supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:types": "supabase gen types --local --lang typescript > src/lib/database.types.ts"
+    "db:types": "supabase gen types --local --lang typescript > src/lib/database.types.ts",
+    "db:add-user": "node scripts/add-user.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

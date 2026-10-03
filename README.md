@@ -47,7 +47,16 @@ npx supabase link --project-ref YOUR_PROJECT_REF   # the ref is in your project 
 npx supabase db push
 ```
 
-### 4. Make login emails show a 6-digit code
+### 4. Create your account and lock sign-ups
+
+Do this **before** your first login, so nobody else can ever claim your email.
+
+1. In Supabase: **Authentication → Users → Add user → Create new user**. Enter your email, leave the password empty if allowed (or use any long random one; you won't need it), and tick **Auto Confirm User**. Your 5 default personas are created automatically.
+2. Then go to **Authentication → Sign In / Providers** and turn **off** "Allow new users to sign up". Save.
+
+The login page never creates accounts. It only sends codes to accounts that already exist.
+
+### 5. Make login emails show a 6-digit code
 
 Offer Brain logs you in with a code from your email. No password needed.
 
@@ -57,7 +66,7 @@ Offer Brain logs you in with a code from your email. No password needed.
 
 > Supabase's built-in email only sends to the members of your Supabase team (that's you), and only a few per hour. That's fine for personal use.
 
-### 5. Copy your keys into `.env.local`
+### 6. Copy your keys into `.env.local`
 
 ```bash
 cp .env.example .env.local
@@ -67,27 +76,23 @@ Open `.env.local` and fill in:
 
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: in Supabase, **Project Settings → API Keys**. Use the **publishable** key (starts with `sb_publishable_`), **not** the secret key.
 - `ANTHROPIC_API_KEY`: create one at [platform.claude.com](https://platform.claude.com) → API keys.
-- `ALLOWED_EMAILS`: your email address. Only these emails can log in.
+- `ALLOWED_EMAILS`: your email address. Only these emails can use the app.
 
-### 6. Run it
+### 7. Run it
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), enter your email, and type in the code you receive. Signing in for the first time creates your account and your 5 default personas.
+Open [http://localhost:3000](http://localhost:3000), enter your email, and type in the code you receive.
 
 **First steps:** fill in **Brand** (your niche and usual numbers), add an **Offer**, then click **New review**.
-
-### 7. Lock it down (recommended)
-
-Once you've logged in once, go to Supabase **Authentication → Sign In / Providers** and turn off **Allow new users to sign up**. `ALLOWED_EMAILS` already blocks strangers; this is a second lock.
 
 ---
 
 ## Try it without spending credits
 
-Set `OFFER_BRAIN_MOCK_AI=true` in `.env.local` and restart. Every review then returns a recorded sample reply in about 2 seconds, so you can click through the whole app for free. (This setting is ignored on the live Vercel site.)
+Set `OFFER_BRAIN_MOCK_AI=true` in `.env.local` and restart. Every review then returns a recorded sample reply in about 2 seconds, so you can click through the whole app for free. Every review gets the same sample, so a re-review shows identical scores. (This setting is ignored on Vercel.)
 
 ---
 
@@ -96,7 +101,7 @@ Set `OFFER_BRAIN_MOCK_AI=true` in `.env.local` and restart. Every review then re
 1. Push this repo to GitHub, then on [vercel.com/new](https://vercel.com/new) import it.
 2. Under **Environment Variables**, add the same values as `.env.local`:
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `CLAUDE_EFFORT`, `ALLOWED_EMAILS`.
-   **`ALLOWED_EMAILS` is required on Vercel.** If it's empty, nobody can log in there, so strangers can't spend your Claude credits.
+   **`ALLOWED_EMAILS` is required on Vercel.** If it's empty, nobody can use any Vercel deployment (production or preview), so strangers can't spend your Claude credits.
 3. Click **Deploy**. Node 22 is picked up automatically from `package.json`.
 
 > Vercel's free Hobby plan is for personal, non-commercial use. If you start selling access, switch to Pro.
@@ -138,7 +143,7 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
 | Variable | Default | What it does |
 |---|---|---|
 | `CLAUDE_MODEL` | `claude-sonnet-5-5` | Which Claude model reviews posts |
-| `CLAUDE_EFFORT` | `medium` | How hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`, or `off`. Higher = slower and pricier. |
+| `CLAUDE_EFFORT` | `medium` | How hard it thinks: `low`, `medium`, `high`, `xhigh`, `max`. Higher = slower and pricier. `off` = use the model's own default (`high` for Sonnet 5.5). |
 | `ALLOWED_EMAILS` | (empty) | Who can log in (comma-separated) |
 | `OFFER_BRAIN_MOCK_AI` | `false` | `true` = recorded sample reply, no API cost |
 
@@ -173,7 +178,13 @@ Needs [Docker](https://www.docker.com/products/docker-desktop/).
 npm run db:start      # starts Supabase on your machine and prints its URL + publishable key
 ```
 
-Put the printed `API_URL` and `PUBLISHABLE_KEY` into `.env.local`. Login emails don't really get sent; read them at [http://127.0.0.1:54324](http://127.0.0.1:54324) (Mailpit).
+Put the printed `API_URL` and `PUBLISHABLE_KEY` into `.env.local`, then create your login (sign-ups are off locally too):
+
+```bash
+npm run db:add-user -- you@example.com
+```
+
+Login emails don't really get sent; read them at [http://127.0.0.1:54324](http://127.0.0.1:54324) (Mailpit).
 
 Other commands:
 
@@ -198,11 +209,13 @@ npm run typecheck
 
 | Problem | Fix |
 |---|---|
-| "Missing NEXT_PUBLIC_SUPABASE_URL…" | You haven't created `.env.local` yet (step 5). Restart `npm run dev` after editing it. |
-| The email has a link but no code | Update both email templates (step 4). |
+| "Missing NEXT_PUBLIC_SUPABASE_URL…" | You haven't created `.env.local` yet (step 6). Restart `npm run dev` after editing it. |
+| "There's no account for this email yet" | Create your user in Supabase (step 4). |
+| The email has a link but no code | Update both email templates (step 5). |
 | "This email isn't allowed" | Add your email to `ALLOWED_EMAILS` and restart. |
 | "ANTHROPIC_API_KEY is not set" / "API key is invalid" | Check the key in `.env.local` (or in Vercel's environment variables). |
 | "Model not found" | Check `CLAUDE_MODEL`. |
 | "Out of credit" | Add credit in the Claude Console billing page. |
 | A review is slow | Normal: 20–60 seconds. Set `CLAUDE_EFFORT=low` for faster, lighter reviews. |
+| "Claude used its whole answer budget on thinking" | Lower `CLAUDE_EFFORT` (e.g. `medium` or `low`). |
 | "permission denied" errors in the logs | The database tables weren't created; redo step 3. |

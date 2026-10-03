@@ -1,35 +1,39 @@
 "use client";
 
 import { useActionState } from "react";
-import { sendCode, verifyCode, type LoginState } from "./actions";
+import { loginAction, type LoginState } from "./actions";
 
-const emailInitial: LoginState = { step: "email", email: "" };
-const codeInitial: LoginState = { step: "code", email: "" };
+const initial: LoginState = { step: "email", email: "" };
 
 export default function LoginForm() {
-  const [emailState, emailAction, sending] = useActionState(sendCode, emailInitial);
-  const [codeState, codeAction, verifying] = useActionState(verifyCode, codeInitial);
+  const [state, action, pending] = useActionState(loginAction, initial);
 
-  // Show the code step once an email was sent (and stay there while verifying).
-  const onCodeStep = emailState.step === "code" && codeState.step !== "email";
-  const email = emailState.email;
-
-  if (!onCodeStep) {
+  if (state.step === "email") {
     return (
-      <form action={emailAction} className="space-y-4">
+      <form action={action} className="space-y-4">
+        <input type="hidden" name="intent" value="send" />
         <div>
           <label htmlFor="email" className="label">
             Email
           </label>
-          <input id="email" name="email" type="email" autoComplete="email" required defaultValue={email} className="input" />
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            defaultValue={state.email}
+            key={state.email}
+            className="input"
+          />
         </div>
-        {(emailState.error || codeState.error) && (
+        {state.error && (
           <p className="text-sm text-red-600" role="alert">
-            {emailState.error ?? codeState.error}
+            {state.error}
           </p>
         )}
-        <button className="btn-primary w-full" disabled={sending}>
-          {sending ? "Sending…" : "Email me a login code"}
+        <button className="btn-primary w-full" disabled={pending}>
+          {pending ? "Sending…" : "Email me a login code"}
         </button>
       </form>
     );
@@ -37,9 +41,10 @@ export default function LoginForm() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-600">{emailState.info}</p>
-      <form action={codeAction} className="space-y-4">
-        <input type="hidden" name="email" value={email} />
+      {state.info && <p className="text-sm text-zinc-600">{state.info}</p>}
+      <form action={action} className="space-y-4">
+        <input type="hidden" name="intent" value="verify" />
+        <input type="hidden" name="email" value={state.email} />
         <div>
           <label htmlFor="code" className="label">
             Login code
@@ -56,21 +61,30 @@ export default function LoginForm() {
             className="input text-center text-2xl tracking-[0.4em]"
           />
         </div>
-        {codeState.error && (
+        {state.error && (
           <p className="text-sm text-red-600" role="alert">
-            {codeState.error}
+            {state.error}
           </p>
         )}
-        <button className="btn-primary w-full" disabled={verifying}>
-          {verifying ? "Checking…" : "Log in"}
+        <button className="btn-primary w-full" disabled={pending}>
+          {pending ? "Please wait…" : "Log in"}
         </button>
       </form>
-      <form action={emailAction}>
-        <input type="hidden" name="email" value={email} />
-        <button className="w-full text-sm text-zinc-500 hover:text-zinc-900" disabled={sending}>
-          {sending ? "Sending…" : "Send a new code"}
-        </button>
-      </form>
+      <div className="flex justify-between gap-2 text-sm">
+        <form action={action}>
+          <input type="hidden" name="intent" value="restart" />
+          <button className="text-zinc-500 hover:text-zinc-900" disabled={pending}>
+            Use a different email
+          </button>
+        </form>
+        <form action={action}>
+          <input type="hidden" name="intent" value="resend" />
+          <input type="hidden" name="email" value={state.email} />
+          <button className="text-zinc-500 hover:text-zinc-900" disabled={pending}>
+            Send a new code
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
