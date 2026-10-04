@@ -2,7 +2,7 @@
 
 Review your social media posts **before** you post them. Offer Brain shows your post to a simulated audience, scores the hook, story and conversion potential, predicts how it will perform, and rewrites the weak parts.
 
-**Status:** Phase 1 (review engine) and Phase 2 (real results, Performance Index, proof library, learning mode, CSV import) are done. Coming next: accuracy dashboard (Phase 3), Instagram auto-pull (Phase 4).
+**Status:** Phase 1 (review engine), Phase 2 (real results, Performance Index, proof library, learning mode, CSV import) and Phase 3 (accuracy dashboard) are done. Coming next: Instagram auto-pull (Phase 4).
 
 ---
 
@@ -155,6 +155,14 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
 
 > **Temporary output format:** the brain file was received without its final section (the JSON output spec). Until it's added, the app appends `prompts/provisional-output-format.md`, and the results page shows a small notice. Once the full brain file is in place, that file gets deleted and `src/lib/schema.ts` updated.
 
+### Accuracy dashboard (Accuracy page)
+
+10. **Brain accuracy** is the Spearman rank correlation between each reviewed post's predicted score and its real Performance Index. It asks "do the posts the brain scores higher actually do better?" 1.00 = perfect order, 0 = no link, negative = backwards. Labels: below 0.3 weak, 0.3–0.6 decent, above 0.6 strong. It stays hidden until 5 reviewed posts have results (fewer is mostly luck).
+11. **The chart** plots every reviewed post with results: predicted score across, Performance Index up, coloured by whether the predicted tier was right, too high or too low. Hover or Tab to a dot for details; click or press Enter to open the post. "Show the data" lists the same numbers as a table.
+12. **Which scores predict your results** runs the same correlation for each of the 8 score categories, so you can see which parts of the scorecard to trust.
+13. **Biggest misses** lists posts whose real tier was furthest from the predicted tier, both ways.
+14. Imported posts (no review) and posts without a Performance Index aren't included; the page says how many.
+
 ### Settings you can change (`.env.local`)
 
 | Variable | Default | What it does |
@@ -184,6 +192,7 @@ src/lib/performance.ts       Performance Index
 src/lib/proof-library.ts     picks best/worst past posts for {{PROOF_LIBRARY}}
 src/lib/learning.ts          learning mode (calibration notes)
 src/lib/csv.ts               CSV import checks (used in the browser and on the server)
+src/lib/accuracy.ts          Brain accuracy maths (Spearman, tiers, misses)
 tests/                       automated tests
 ```
 
@@ -219,7 +228,7 @@ npm run db:stop
 
 ```bash
 npm test              # scoring, Performance Index, JSON parsing/validation, brain placeholders, Claude retry/errors,
-                      # persona limit, proof library, learning mode, CSV import, dates
+                      # persona limit, proof library, learning mode, CSV import, dates, accuracy
 npm run test:db       # database rules against the local database (run `npm run db:start` first)
 npm run lint
 npm run typecheck

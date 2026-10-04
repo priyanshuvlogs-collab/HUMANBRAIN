@@ -1,17 +1,10 @@
-import type { Confidence, Tier } from "@/lib/constants";
+import { TIER_LABELS, type Confidence, type Tier } from "@/lib/constants";
 
 const TIER_STYLES: Record<Tier, string> = {
   BELOW: "bg-red-100 text-red-800 ring-red-200",
   AVERAGE: "bg-zinc-100 text-zinc-800 ring-zinc-200",
   ABOVE: "bg-emerald-100 text-emerald-800 ring-emerald-200",
   BREAKOUT: "bg-violet-600 text-white ring-violet-600",
-};
-
-const TIER_LABELS: Record<Tier, string> = {
-  BELOW: "Below average",
-  AVERAGE: "Average",
-  ABOVE: "Above average",
-  BREAKOUT: "Breakout",
 };
 
 export function TierBadge({ tier }: { tier: Tier }) {
