@@ -42,6 +42,13 @@ export const CTA_TYPE_KEYS = Object.keys(CTA_TYPES) as CtaType[];
 export const TIERS = ["BELOW", "AVERAGE", "ABOVE", "BREAKOUT"] as const;
 export type Tier = (typeof TIERS)[number];
 
+export const TIER_LABELS: Record<Tier, string> = {
+  BELOW: "Below average",
+  AVERAGE: "Average",
+  ABOVE: "Above average",
+  BREAKOUT: "Breakout",
+};
+
 export const CONFIDENCE_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
 export type Confidence = (typeof CONFIDENCE_LEVELS)[number];
 

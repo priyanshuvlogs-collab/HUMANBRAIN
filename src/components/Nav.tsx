@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/reviews/new", label: "New review" },
   { href: "/posts", label: "Posts" },
   { href: "/import", label: "Import" },
+  { href: "/accuracy", label: "Accuracy" },
   { href: "/settings/brand", label: "Brand" },
   { href: "/settings/offers", label: "Offers" },
   { href: "/settings/personas", label: "Personas" },
