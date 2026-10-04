@@ -2,18 +2,26 @@
 
 import ActionForm from "@/components/ActionForm";
 import { PLATFORMS, PLATFORM_KEYS, type Platform } from "@/lib/constants";
+import { METRIC_KEYS, averageKey, type MetricKey } from "@/lib/performance";
 import { saveBrand } from "./actions";
 
 type Averages = Partial<Record<string, number | null>>;
 
-const AVERAGE_FIELDS = [
-  { key: "avg_views", label: "Views / reach", suffix: "" },
-  { key: "avg_hold_3s_pct", label: "3-sec hold", suffix: "%" },
-  { key: "avg_watch_pct", label: "Avg watch", suffix: "%" },
-  { key: "avg_saves", label: "Saves", suffix: "" },
-  { key: "avg_shares", label: "Shares", suffix: "" },
-  { key: "avg_dms", label: "DMs", suffix: "" },
-] as const;
+const AVERAGE_LABELS: Record<MetricKey, string> = {
+  views: "Views / reach",
+  hold_3s_pct: "3-sec hold (%)",
+  avg_watch_pct: "Avg watch (%)",
+  likes: "Likes",
+  comments: "Comments",
+  saves: "Saves",
+  shares: "Shares",
+  dms: "DMs",
+  link_clicks: "Link clicks",
+  leads: "Leads",
+  sales: "Sales",
+};
+
+const AVERAGE_FIELDS = METRIC_KEYS.map((key) => ({ key: averageKey(key), label: AVERAGE_LABELS[key] }));
 
 export default function BrandForm(props: {
   handle: string;
@@ -63,8 +71,9 @@ export default function BrandForm(props: {
             <div>
               <h2 className="font-semibold">My average performance</h2>
               <p className="text-sm text-zinc-600">
-                What a typical post gets on each platform. The brain compares predictions against these. Leave blank if
-                you don&apos;t know.
+                What a typical post gets on each platform. The brain compares predictions against these, and each
+                post&apos;s Performance Index is measured against them (1.0 = a typical post). Fill in what you know — blanks
+                are skipped.
               </p>
             </div>
             {PLATFORM_KEYS.map((p) => (
@@ -75,7 +84,6 @@ export default function BrandForm(props: {
                     <div key={f.key}>
                       <label htmlFor={`${p}.${f.key}`} className="mb-1 block text-xs font-medium text-zinc-600">
                         {f.label}
-                        {f.suffix && ` (${f.suffix})`}
                       </label>
                       <input
                         id={`${p}.${f.key}`}

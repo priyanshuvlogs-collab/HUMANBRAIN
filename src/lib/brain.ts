@@ -33,6 +33,17 @@ export async function loadBrainFiles(): Promise<BrainFiles> {
   return cached;
 }
 
+const promptCache = new Map<string, string>();
+
+/** Loads another prompt file from prompts/ (e.g. learning-mode.md). Cached in production only. */
+export async function loadPromptFile(name: string): Promise<string> {
+  const hit = promptCache.get(name);
+  if (hit !== undefined && process.env.NODE_ENV === "production") return hit;
+  const text = await readFile(path.join(PROMPTS_DIR, name), "utf8");
+  promptCache.set(name, text);
+  return text;
+}
+
 /** True while the brain file has no JSON output spec of its own (it was received truncated). */
 export function needsProvisionalFormat(brain: string): boolean {
   return !/```json/i.test(brain);

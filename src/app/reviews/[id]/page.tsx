@@ -72,10 +72,17 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
             )}
           </div>
         </div>
+        <Link href={`/posts/${post.id}`} className="btn-secondary w-full sm:w-auto">
+          Posted it? Log real results →
+        </Link>
         {review.confidence === "LOW" && (
           <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-            Why low confidence? The brain has no proof library yet (your past posts with real results), so it can&apos;t compare
-            against what actually worked for you. This improves once you log results (Phase 2).
+            Why low confidence? The brain has little or no proof library yet (your past posts with real results), so it
+            can&apos;t compare against what actually worked for you. This improves as you{" "}
+            <Link href="/posts" className="underline">
+              log results
+            </Link>
+            .
           </p>
         )}
         {review.provisional_format && (

@@ -219,4 +219,178 @@ describe.skipIf(!DB_URL)("database (local Supabase)", () => {
       expect(code).toBe("23514");
     });
   });
+  describe("results and learning notes (Phase 2)", () => {
+    const newPost = (userId: string) =>
+      asUser(pool, userId, async (c) => {
+        const { rows } = await c.query(
+          "insert into public.posts (platform, format, goal, hook) values ('instagram', 'reel', 'leads', 'Results hook') returning id, source",
+        );
+        return rows[0] as { id: string; source: string };
+      });
+
+    it("the owner can save results and notes; new posts default to source 'app'", async () => {
+      const post = await newPost(userA);
+      expect(post.source).toBe("app");
+      const ids = await asUser(pool, userA, async (c) => {
+        const { rows: r } = await c.query(
+          "insert into public.results (post_id, views, dms, performance_index) values ($1, 12000, 31, 1.35) returning id, source",
+          [post.id],
+        );
+        const { rows: n } = await c.query(
+          "insert into public.calibration_notes (post_id, result_id) values ($1, $2) returning id, status",
+          [post.id, r[0].id],
+        );
+        return { result: r[0], note: n[0] };
+      });
+      expect(ids.result.source).toBe("manual");
+      expect(ids.note.status).toBe("pending");
+    });
+
+    it("user B can't attach results or notes to user A's post, or read A's", async () => {
+      const post = await newPost(userA);
+      await asUser(pool, userA, (c) => c.query("insert into public.results (post_id, views) values ($1, 10)", [post.id]));
+      const resultCode = await pgCode(
+        asUser(pool, userB, (c) => c.query("insert into public.results (post_id, views) values ($1, 999)", [post.id])),
+      );
+      expect(resultCode).toBe("42501");
+      const noteCode = await pgCode(
+        asUser(pool, userB, (c) => c.query("insert into public.calibration_notes (post_id) values ($1)", [post.id])),
+      );
+      expect(noteCode).toBe("42501");
+      const seen = await asUser(pool, userB, async (c) => {
+        const { rows } = await c.query("select * from public.results where post_id = $1", [post.id]);
+        const upd = await c.query("update public.results set views = 0 where post_id = $1", [post.id]);
+        return { rows: rows.length, updated: upd.rowCount };
+      });
+      expect(seen).toEqual({ rows: 0, updated: 0 });
+    });
+
+    it("rejects impossible numbers", async () => {
+      const post = await newPost(userA);
+      const pct = await pgCode(
+        asUser(pool, userA, (c) => c.query("insert into public.results (post_id, hold_3s_pct) values ($1, 120)", [post.id])),
+      );
+      const negative = await pgCode(
+        asUser(pool, userA, (c) => c.query("insert into public.results (post_id, likes) values ($1, -1)", [post.id])),
+      );
+      const source = await pgCode(
+        asUser(pool, userA, (c) =>
+          c.query("insert into public.posts (platform, format, goal, hook, source) values ('instagram', 'reel', 'views', 'x', 'api')"),
+        ),
+      );
+      expect([pct, negative, source]).toEqual(["23514", "23514", "23514"]);
+    });
+
+    it("deleting a post deletes its results and notes", async () => {
+      const post = await newPost(userA);
+      await asUser(pool, userA, async (c) => {
+        const { rows } = await c.query("insert into public.results (post_id, views) values ($1, 10) returning id", [post.id]);
+        await c.query("insert into public.calibration_notes (post_id, result_id) values ($1, $2)", [post.id, rows[0].id]);
+        await c.query("delete from public.posts where id = $1", [post.id]);
+      });
+      const { rows } = await pool.query(
+        "select (select count(*) from public.results where post_id = $1)::int + (select count(*) from public.calibration_notes where post_id = $1)::int as n",
+        [post.id],
+      );
+      expect(rows[0].n).toBe(0);
+    });
+
+    it("a result or note can't be moved onto someone else's post, or point at another post's review", async () => {
+      const mine = await newPost(userA);
+      const theirs = await newPost(userB);
+      const otherMine = await newPost(userA);
+      const ids = await asUser(pool, userA, async (c) => {
+        const { rows: r } = await c.query("insert into public.results (post_id, views) values ($1, 1) returning id", [mine.id]);
+        const { rows: rv } = await c.query(
+          `insert into public.reviews (post_id, raw_response, parsed, schema_version, total_score, predicted_tier, confidence, model, brain_version)
+           values ($1, 'x', '{}', 1, 50, 'ABOVE', 'LOW', 'm', 'v') returning id`,
+          [otherMine.id],
+        );
+        return { result: r[0].id as string, otherReview: rv[0].id as string };
+      });
+      const moveResult = await pgCode(
+        asUser(pool, userA, (c) => c.query("update public.results set post_id = $1 where id = $2", [theirs.id, ids.result])),
+      );
+      expect(moveResult).toBe("42501");
+      const wrongReview = await pgCode(
+        asUser(pool, userA, (c) =>
+          c.query("insert into public.calibration_notes (post_id, review_id) values ($1, $2)", [mine.id, ids.otherReview]),
+        ),
+      );
+      expect(wrongReview).toBe("42501");
+    });
+
+    it("latest_results shows each post's newest save, only to its owner", async () => {
+      const post = await newPost(userA);
+      await asUser(pool, userA, async (c) => {
+        await c.query("insert into public.results (post_id, views, performance_index, created_at) values ($1, 100, 0.5, now() - interval '1 hour')", [post.id]);
+        await c.query("insert into public.results (post_id, views, performance_index, collected_at) values ($1, 200, 1.5, now() - interval '3 days')", [post.id]);
+      });
+      const mine = await asUser(pool, userA, async (c) => {
+        const { rows } = await c.query("select views::int, performance_index::float, root_id from public.latest_results where post_id = $1", [post.id]);
+        return rows;
+      });
+      expect(mine).toEqual([{ views: 200, performance_index: 1.5, root_id: post.id }]);
+      const theirs = await asUser(pool, userB, async (c) => {
+        const { rows } = await c.query("select * from public.latest_results where post_id = $1", [post.id]);
+        return rows.length;
+      });
+      expect(theirs).toBe(0);
+    });
+
+    it("import_csv_batch saves posts and results together, or nothing at all", async () => {
+      const good = randomUUID();
+      const count = await asUser(pool, userA, async (c) => {
+        const { rows } = await c.query("select public.import_csv_batch($1::jsonb) as n", [
+          JSON.stringify([{ id: good, platform: "tiktok", format: "video", goal: "views", hook: "CSV hook", posted_at: "2026-09-01T12:00:00Z", views: 5000, performance_index: 1.2 }]),
+        ]);
+        return rows[0].n;
+      });
+      expect(count).toBe(1);
+      const { rows: saved } = await pool.query(
+        "select p.source, p.status, r.source as result_source, r.views::int from public.posts p join public.results r on r.post_id = p.id where p.id = $1",
+        [good],
+      );
+      expect(saved).toEqual([{ source: "csv", status: "posted", result_source: "csv", views: 5000 }]);
+
+      const ok = randomUUID();
+      const code = await pgCode(
+        asUser(pool, userA, (c) =>
+          c.query("select public.import_csv_batch($1::jsonb)", [
+            JSON.stringify([
+              { id: ok, platform: "tiktok", format: "video", goal: "views", hook: "Fine row", views: 10 },
+              { id: randomUUID(), platform: "tiktok", format: "video", goal: "views", hook: "Bad row", hold_3s_pct: 150 },
+            ]),
+          ]),
+        ),
+      );
+      expect(code).toBe("23514");
+      const { rows: leftover } = await pool.query("select 1 from public.posts where id = $1", [ok]);
+      expect(leftover).toHaveLength(0);
+    });
+
+    it("signed-out visitors can't call the import function", async () => {
+      const c = await pool.connect();
+      try {
+        await c.query("begin");
+        await c.query("set local role anon");
+        expect(await pgCode(c.query("select public.import_csv_batch('[]'::jsonb)"))).toBe("42501");
+      } finally {
+        await c.query("rollback");
+        c.release();
+      }
+    });
+
+    it("signed-out visitors (anon) can't read results", async () => {
+      const c = await pool.connect();
+      try {
+        await c.query("begin");
+        await c.query("set local role anon");
+        expect(await pgCode(c.query("select * from public.results"))).toBe("42501");
+      } finally {
+        await c.query("rollback");
+        c.release();
+      }
+    });
+  });
 });

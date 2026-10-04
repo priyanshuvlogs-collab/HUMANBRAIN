@@ -1,12 +1,15 @@
 // Turns database rows into the plain-text blocks that fill the brain's {{PLACEHOLDERS}}.
 // Pure functions (no database calls) so they are easy to test.
-import { CTA_TYPES, GOALS, formatLabel, platformLabel, type CtaType } from "./constants";
+import { CTA_TYPES, GOALS, SCORE_LABELS, formatLabel, platformLabel, type CtaType, type ScoreCategory } from "./constants";
 import type { PlaceholderValues } from "./brain";
 import type { Tables } from "./database.types";
+import { describeMetrics, formatDate, truncate } from "./format";
+import { METRIC_KEYS, averageKey, tierForPerformanceIndex, type Metrics } from "./performance";
+import type { ProofCandidate, ProofSelection } from "./proof-library";
 
 type Brand = Pick<Tables<"brand_settings">, "handle" | "niche" | "platforms"> | null;
 type Offer = Pick<Tables<"offers">, "name" | "price" | "cta_type" | "cta_destination"> | null;
-type Averages = Omit<Tables<"platform_averages">, "id" | "user_id" | "updated_at"> | null;
+type Averages = Partial<Record<string, number | string | null>> | null;
 type Persona = Pick<Tables<"personas">, "name" | "description" | "voice">;
 
 export type PostInput = {
@@ -40,26 +43,72 @@ export function offerContext(offer: Offer): string {
 
 export function averageMetricsContext(platform: string, averages: Averages): string {
   const label = platformLabel(platform);
-  if (!averages) return `None yet — no average metrics recorded for ${label}.`;
-  const items: string[] = [];
-  if (averages.avg_views != null) items.push(`${formatNumber(Number(averages.avg_views))} views/reach`);
-  if (averages.avg_hold_3s_pct != null) items.push(`${averages.avg_hold_3s_pct}% 3-second hold`);
-  if (averages.avg_watch_pct != null) items.push(`${averages.avg_watch_pct}% average watch`);
-  if (averages.avg_saves != null) items.push(`${formatNumber(Number(averages.avg_saves))} saves`);
-  if (averages.avg_shares != null) items.push(`${formatNumber(Number(averages.avg_shares))} shares`);
-  if (averages.avg_dms != null) items.push(`${formatNumber(Number(averages.avg_dms))} DMs`);
-  if (items.length === 0) return `None yet — no average metrics recorded for ${label}.`;
-  return `On ${label}, a typical post gets ${items.join(", ")}.`;
+  const metrics: Metrics = Object.fromEntries(
+    METRIC_KEYS.map((k) => {
+      const v = averages?.[averageKey(k)];
+      return [k, v == null ? null : Number(v)];
+    }),
+  );
+  if (!averages || Object.values(metrics).every((v) => v == null)) {
+    return `None yet — no average metrics recorded for ${label}.`;
+  }
+  return `On ${label}, a typical post gets: ${describeMetrics(metrics)}.`;
 }
 
-// Filled from real results in Phase 2.
-export function proofLibraryContext(): string {
-  return "Empty — no past posts with real results have been recorded yet.";
+function proofLine(c: ProofCandidate, i: number, platform: string): string {
+  const goal = GOALS[c.goal as keyof typeof GOALS] ?? c.goal;
+  const script = c.script ? ` | Script: "${truncate(c.script, 280)}"` : "";
+  return `${i + 1}. Performance Index ${c.performanceIndex.toFixed(2)} — ${formatLabel(platform, c.format)}, goal ${goal}. Hook: "${truncate(c.hook, 200)}"${script} | Results: ${describeMetrics(c.metrics)}`;
 }
 
-// Filled from learning-mode notes in Phase 2.
-export function calibrationNotesContext(): string {
-  return "None yet — no prediction misses have been analysed.";
+/** {{PROOF_LIBRARY}}: best and worst past posts with real metrics. */
+export function proofLibraryContext(selection: ProofSelection | null, platform: string): string {
+  const label = platformLabel(platform);
+  if (!selection || (selection.best.length === 0 && selection.worst.length === 0)) {
+    return `Empty — no past ${label} posts with real results have been recorded yet.`;
+  }
+  const lines = [`(Performance Index compares each post with the creator's ${label} averages: 1.0 = average, 2.0 = double.)`];
+  if (selection.best.length) {
+    lines.push(`BEST ${label} posts:`, ...selection.best.map((c, i) => proofLine(c, i, platform)));
+  }
+  if (selection.worst.length) {
+    lines.push(`WORST ${label} posts:`, ...selection.worst.map((c, i) => proofLine(c, i, platform)));
+  }
+  return lines.join("\n");
+}
+
+export type CalibrationNoteSummary = {
+  createdAt: string;
+  platform: string;
+  format: string;
+  goal: string;
+  predictedScore: number | null;
+  predictedTier: string | null;
+  performanceIndex: number | null;
+  gapSummary: string | null;
+  lesson: string | null;
+  weighDifferently: { category: string; direction: string }[];
+};
+
+/** {{CALIBRATION_NOTES}}: lessons from the newest learning-mode notes. */
+export function calibrationNotesContext(notes: CalibrationNoteSummary[]): string {
+  if (notes.length === 0) return "None yet — no prediction misses have been analysed.";
+  return notes
+    .map((n) => {
+      const predicted = n.predictedScore != null ? `predicted ${n.predictedScore}/100 (${n.predictedTier})` : "predicted —";
+      const actual =
+        n.performanceIndex != null
+          ? `actual Performance Index ${n.performanceIndex.toFixed(2)} (${tierForPerformanceIndex(n.performanceIndex)})`
+          : "actual —";
+      const weigh = n.weighDifferently.length
+        ? ` Weigh differently: ${n.weighDifferently
+            .map((w) => `${SCORE_LABELS[w.category as ScoreCategory] ?? w.category} ${w.direction}`)
+            .join(", ")}.`
+        : "";
+      const goal = GOALS[n.goal as keyof typeof GOALS] ?? n.goal;
+      return `- ${formatDate(n.createdAt)}, ${platformLabel(n.platform)} ${formatLabel(n.platform, n.format)} (goal ${goal}): ${predicted}, ${actual}. ${n.lesson ?? n.gapSummary ?? ""}${weigh}`.trim();
+    })
+    .join("\n");
 }
 
 export function activePersonasContext(personas: Persona[]): string {
@@ -79,13 +128,15 @@ export function buildPlaceholderValues(input: {
   offer: Offer;
   averages: Averages;
   personas: Persona[];
+  proof?: ProofSelection | null;
+  notes?: CalibrationNoteSummary[];
 }): PlaceholderValues {
   return {
     BRAND_CONTEXT: brandContext(input.brand),
     OFFER_CONTEXT: offerContext(input.offer),
     AVERAGE_METRICS: averageMetricsContext(input.platform, input.averages),
-    PROOF_LIBRARY: proofLibraryContext(),
-    CALIBRATION_NOTES: calibrationNotesContext(),
+    PROOF_LIBRARY: proofLibraryContext(input.proof ?? null, input.platform),
+    CALIBRATION_NOTES: calibrationNotesContext(input.notes ?? []),
     ACTIVE_PERSONAS: activePersonasContext(input.personas),
   };
 }
@@ -109,10 +160,6 @@ export function postMessage(post: PostInput, offerName: string | null): string {
     "On-screen text:",
     post.onScreenText.trim() || "(none)",
   ].join("\n");
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 1 });
 }
 
 function formatMoney(n: number): string {

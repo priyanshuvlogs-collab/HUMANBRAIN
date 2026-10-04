@@ -2,7 +2,7 @@
 
 Review your social media posts **before** you post them. Offer Brain shows your post to a simulated audience, scores the hook, story and conversion potential, predicts how it will perform, and rewrites the weak parts.
 
-**Status:** Phase 1 (review engine) is done. Coming next: results + proof library + learning (Phase 2), accuracy dashboard (Phase 3), Instagram auto-pull (Phase 4).
+**Status:** Phase 1 (review engine) and Phase 2 (real results, Performance Index, proof library, learning mode, CSV import) are done. Coming next: accuracy dashboard (Phase 3), Instagram auto-pull (Phase 4).
 
 ---
 
@@ -39,6 +39,7 @@ Pick **one** option.
 **Option A: copy and paste (easiest)**
 1. In Supabase, open **SQL Editor** → **New query**.
 2. Open `supabase/migrations/20261003000000_init.sql` from this project, copy **everything**, paste it in, and click **Run**.
+3. Do the same with every other file in `supabase/migrations/`, **in name order** (the date in the name): `20261004000000_results_learning.sql`, then `20261004120000_phase2_hardening.sql`. When you update the app later, run only the new files.
 
 **Option B: command line**
 ```bash
@@ -124,8 +125,8 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
    | `{{OFFER_CONTEXT}}` | The offer you picked |
    | `{{AVERAGE_METRICS}}` | Your averages for the post's platform |
    | `{{ACTIVE_PERSONAS}}` | Your active personas (max 10) |
-   | `{{PROOF_LIBRARY}}` | Your best/worst past posts (Phase 2; empty for now) |
-   | `{{CALIBRATION_NOTES}}` | Lessons from past misses (Phase 2; empty for now) |
+   | `{{PROOF_LIBRARY}}` | Your 5 best and 5 worst past posts on the same platform, with real numbers (never the post being reviewed or its other versions) |
+   | `{{CALIBRATION_NOTES}}` | The 5 newest lessons from learning mode (one per post) |
 
    You can edit the brain file any time. Each review records a short "brain version" so you can tell which version scored it.
 2. **Claude** reads the brain plus your post, writes its analysis, and ends with a JSON block.
@@ -134,7 +135,23 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
    hook 25% · clarity 10% · curiosity 15% · story 15% · proof 10% · value 10% · offer fit 10% · CTA 5%.
 5. **Re-review:** on the results page, pick an alternative hook (or write your own). The same post is reviewed again with that hook, and the two versions open side by side.
 
-**Why does every review say "Low confidence" right now?** The brain is told to use LOW confidence when your proof library (past posts with real results) is empty. That changes in Phase 2, once you log results.
+**Why does a review say "Low confidence"?** The brain is told to use LOW confidence when your proof library (past posts with real results) is empty or thin. Log results or import past posts and it improves.
+
+### Real results, Performance Index and learning
+
+6. **Log real results:** after posting, open the post (**Posts**, or "Posted it? Log real results" on a review) and type in the numbers from your insights. Blank fields are fine. Each save adds a row to the post's results history; the newest row counts.
+7. **Performance Index (PI)** compares a post with *your* averages on that platform (Brand settings): **1.00 = a typical post, 2.00 = double, 0.50 = half.** Each metric becomes actual ÷ your average (capped at 10× so one viral outlier can't dominate), then they're combined with weights that depend on the post's goal:
+
+   | Goal | What counts |
+   |---|---|
+   | Views | views 60% · avg watch % 40% |
+   | Engagement | comments 30% · saves 25% · shares 25% · likes 20% |
+   | Leads | DMs 50% · link clicks 30% · leads 20% |
+   | Sales | sales 50% · leads 20% · DMs 15% · link clicks 15% |
+
+   Metrics you didn't record (or have no average for) are skipped and the rest re-weighted. No usable metric → no PI (add your averages). When you change your averages, every past PI is recalculated. PI bands: under 0.8 below average, 0.8–1.2 average, 1.2–2 above average, 2+ breakout.
+8. **Learning mode:** when you save results for a reviewed post, Claude compares its prediction with what happened (`prompts/learning-mode.md`) and writes a lesson. It runs in the background; the post page shows "Comparing…" and updates by itself, usually within a minute. If it fails, press **Try again**. The 5 newest lessons go into every future review.
+9. **CSV import (Import page):** bring in past posts with their numbers. Download the template, fill one row per post, upload, check the preview (rows with problems are listed and skipped), then import. Imported posts fill the proof library (they have no review, so no learning note). Importing the same file twice is safe: posts with the same platform, hook and date are skipped. Each batch of rows is saved all-or-nothing. Semicolon-separated files with decimal commas (1.234,5) and Excel's Windows CSVs work too.
 
 > **Temporary output format:** the brain file was received without its final section (the JSON output spec). Until it's added, the app appends `prompts/provisional-output-format.md`, and the results page shows a small notice. Once the full brain file is in place, that file gets deleted and `src/lib/schema.ts` updated.
 
@@ -154,15 +171,19 @@ If Claude declines to review a post (rare), the app asks the API to retry on Ant
 ## Project layout
 
 ```
-prompts/                     the brain (system prompt) + temporary output format
+prompts/                     the brain (system prompt), temporary output format, learning-mode prompt
 supabase/migrations/         database tables, security rules, persona limit, signup trigger
 supabase/templates/          login email templates (6-digit code)
-src/app/                     pages: login, reviews, compare, settings, /api/review
+src/app/                     pages: login, reviews, compare, posts, import, settings, /api/review
 src/components/              UI pieces (score bars, persona cards, loading screen, …)
 src/lib/brain.ts             loads the brain, fills placeholders
 src/lib/claude.ts            calls Claude, one JSON retry, friendly errors
 src/lib/schema.ts            the JSON shape we expect (zod)
 src/lib/scoring.ts           weighted total score
+src/lib/performance.ts       Performance Index
+src/lib/proof-library.ts     picks best/worst past posts for {{PROOF_LIBRARY}}
+src/lib/learning.ts          learning mode (calibration notes)
+src/lib/csv.ts               CSV import checks (used in the browser and on the server)
 tests/                       automated tests
 ```
 
@@ -197,7 +218,8 @@ npm run db:stop
 ## Tests
 
 ```bash
-npm test              # scoring, JSON parsing/validation, brain placeholders, Claude retry/errors, persona limit
+npm test              # scoring, Performance Index, JSON parsing/validation, brain placeholders, Claude retry/errors,
+                      # persona limit, proof library, learning mode, CSV import, dates
 npm run test:db       # database rules against the local database (run `npm run db:start` first)
 npm run lint
 npm run typecheck
@@ -219,3 +241,8 @@ npm run typecheck
 | A review is slow | Normal: 20–60 seconds. Set `CLAUDE_EFFORT=low` for faster, lighter reviews. |
 | "Claude used its whole answer budget on thinking" | Lower `CLAUDE_EFFORT` (e.g. `medium` or `low`). |
 | "permission denied" errors in the logs | The database tables weren't created; redo step 3. |
+| Posts page errors / "relation results does not exist" | Run the newer migration files too (step 3). |
+| No Performance Index on a post | Add your averages for that platform in Brand settings (for the metrics its goal uses). |
+| Learning note says it was cut off | Press **Try again**. |
+| CSV dates look wrong in the preview | Use YYYY-MM-DD. For dates like 03/09/2026 the order (day/month or month/day) is worked out from the whole file and shown above the preview. |
+| Odd characters (Don�t) in imported text | Save the file as "CSV UTF-8" in Excel. (Plain Excel CSVs are also understood.) |
