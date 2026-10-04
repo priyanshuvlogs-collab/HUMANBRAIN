@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { isEmailAllowed } from "./allowlist";
+import { hasSupabaseEnv } from "./supabase/env";
 import { createClient } from "./supabase/server";
 
 export type CurrentUser = {
@@ -14,6 +15,7 @@ export type CurrentUser = {
  * Every Server Action and route handler calls this (the proxy alone is not enough).
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  if (!hasSupabaseEnv()) return null; // not set up yet — the proxy shows /setup
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getClaims();
   const claims = data?.claims;

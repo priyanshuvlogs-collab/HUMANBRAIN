@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "../database.types";
-import { supabaseEnv } from "./env";
+import { hasSupabaseEnv, supabaseEnv } from "./env";
 
 const PUBLIC_PATHS = ["/login"];
 
@@ -11,6 +11,19 @@ const PUBLIC_PATHS = ["/login"];
  * (or answers API calls with a JSON 401 instead of an HTML redirect).
  */
 export async function updateSession(request: NextRequest) {
+  // Supabase settings missing (first deploy): show the setup checklist instead of crashing.
+  if (!hasSupabaseEnv()) {
+    const path = request.nextUrl.pathname;
+    if (path === "/setup") return NextResponse.next({ request });
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Offer Brain isn't set up yet. Open /setup for the steps." }, { status: 503 });
+    }
+    const setupUrl = request.nextUrl.clone();
+    setupUrl.pathname = "/setup";
+    setupUrl.search = "";
+    return NextResponse.redirect(setupUrl);
+  }
+
   let response = NextResponse.next({ request });
   const { url, key } = supabaseEnv();
 
