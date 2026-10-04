@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import type { Platform } from "@/lib/constants";
+import { METRIC_KEYS, averageKey } from "@/lib/performance";
 import BrandForm from "./BrandForm";
 
 export default async function BrandSettingsPage() {
@@ -12,14 +13,7 @@ export default async function BrandSettingsPage() {
   const byPlatform = Object.fromEntries(
     (averages ?? []).map((a) => [
       a.platform,
-      {
-        avg_views: a.avg_views,
-        avg_hold_3s_pct: a.avg_hold_3s_pct,
-        avg_watch_pct: a.avg_watch_pct,
-        avg_saves: a.avg_saves,
-        avg_shares: a.avg_shares,
-        avg_dms: a.avg_dms,
-      },
+      Object.fromEntries(METRIC_KEYS.map((k) => [averageKey(k), a[averageKey(k) as keyof typeof a] as number | null])),
     ]),
   ) as Partial<Record<Platform, Record<string, number | null>>>;
 

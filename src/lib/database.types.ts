@@ -36,6 +36,37 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"calibration_notes": {
+                  Row: {
+                    "created_at": string,"details": Json | null,"error": string | null,"gap_summary": string | null,"id": string,"lesson": string | null,"model": string | null,"post_id": string,"result_id": string | null,"review_id": string | null,"status": string,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"details"?: Json | null,"error"?: string | null,"gap_summary"?: string | null,"id"?: string,"lesson"?: string | null,"model"?: string | null,"post_id": string,"result_id"?: string | null,"review_id"?: string | null,"status"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"details"?: Json | null,"error"?: string | null,"gap_summary"?: string | null,"id"?: string,"lesson"?: string | null,"model"?: string | null,"post_id"?: string,"result_id"?: string | null,"review_id"?: string | null,"status"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "calibration_notes_post_id_fkey"
+      columns: ["post_id"]
+isOneToOne: false
+      referencedRelation: "posts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "calibration_notes_result_id_fkey"
+      columns: ["result_id"]
+isOneToOne: false
+      referencedRelation: "results"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "calibration_notes_review_id_fkey"
+      columns: ["review_id"]
+isOneToOne: false
+      referencedRelation: "reviews"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"offers": {
                   Row: {
                     "created_at": string,"cta_destination": string,"cta_type": string,"id": string,"name": string,"price": number | null,"user_id": string
@@ -64,26 +95,26 @@ export type Database = {
                   ]
                 },"platform_averages": {
                   Row: {
-                    "avg_dms": number | null,"avg_hold_3s_pct": number | null,"avg_saves": number | null,"avg_shares": number | null,"avg_views": number | null,"avg_watch_pct": number | null,"id": string,"platform": string,"updated_at": string,"user_id": string
+                    "avg_comments": number | null,"avg_dms": number | null,"avg_hold_3s_pct": number | null,"avg_leads": number | null,"avg_likes": number | null,"avg_link_clicks": number | null,"avg_sales": number | null,"avg_saves": number | null,"avg_shares": number | null,"avg_views": number | null,"avg_watch_pct": number | null,"id": string,"platform": string,"updated_at": string,"user_id": string
                   }
                   Insert: {
-                    "avg_dms"?: number | null,"avg_hold_3s_pct"?: number | null,"avg_saves"?: number | null,"avg_shares"?: number | null,"avg_views"?: number | null,"avg_watch_pct"?: number | null,"id"?: string,"platform": string,"updated_at"?: string,"user_id"?: string
+                    "avg_comments"?: number | null,"avg_dms"?: number | null,"avg_hold_3s_pct"?: number | null,"avg_leads"?: number | null,"avg_likes"?: number | null,"avg_link_clicks"?: number | null,"avg_sales"?: number | null,"avg_saves"?: number | null,"avg_shares"?: number | null,"avg_views"?: number | null,"avg_watch_pct"?: number | null,"id"?: string,"platform": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "avg_dms"?: number | null,"avg_hold_3s_pct"?: number | null,"avg_saves"?: number | null,"avg_shares"?: number | null,"avg_views"?: number | null,"avg_watch_pct"?: number | null,"id"?: string,"platform"?: string,"updated_at"?: string,"user_id"?: string
+                    "avg_comments"?: number | null,"avg_dms"?: number | null,"avg_hold_3s_pct"?: number | null,"avg_leads"?: number | null,"avg_likes"?: number | null,"avg_link_clicks"?: number | null,"avg_sales"?: number | null,"avg_saves"?: number | null,"avg_shares"?: number | null,"avg_views"?: number | null,"avg_watch_pct"?: number | null,"id"?: string,"platform"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"posts": {
                   Row: {
-                    "created_at": string,"external_post_id": string | null,"format": string,"goal": string,"hook": string,"id": string,"offer_id": string | null,"on_screen_text": string,"platform": string,"posted_at": string | null,"root_post_id": string | null,"script": string,"status": string,"user_id": string
+                    "created_at": string,"external_post_id": string | null,"format": string,"goal": string,"hook": string,"id": string,"offer_id": string | null,"on_screen_text": string,"platform": string,"posted_at": string | null,"root_post_id": string | null,"script": string,"source": string,"status": string,"user_id": string,"video_length_sec": number | null
                   }
                   Insert: {
-                    "created_at"?: string,"external_post_id"?: string | null,"format": string,"goal": string,"hook": string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform": string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"status"?: string,"user_id"?: string
+                    "created_at"?: string,"external_post_id"?: string | null,"format": string,"goal": string,"hook": string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform": string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
                   }
                   Update: {
-                    "created_at"?: string,"external_post_id"?: string | null,"format"?: string,"goal"?: string,"hook"?: string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform"?: string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"status"?: string,"user_id"?: string
+                    "created_at"?: string,"external_post_id"?: string | null,"format"?: string,"goal"?: string,"hook"?: string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform"?: string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
                   }
                   Relationships: [
                     {
@@ -95,6 +126,25 @@ isOneToOne: false
     },{
       foreignKeyName: "posts_root_post_id_fkey"
       columns: ["root_post_id"]
+isOneToOne: false
+      referencedRelation: "posts"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"results": {
+                  Row: {
+                    "avg_watch_pct": number | null,"collected_at": string,"comments": number | null,"created_at": string,"dms": number | null,"hold_3s_pct": number | null,"id": string,"leads": number | null,"likes": number | null,"link_clicks": number | null,"performance_index": number | null,"post_id": string,"sales": number | null,"saves": number | null,"shares": number | null,"source": string,"user_id": string,"views": number | null
+                  }
+                  Insert: {
+                    "avg_watch_pct"?: number | null,"collected_at"?: string,"comments"?: number | null,"created_at"?: string,"dms"?: number | null,"hold_3s_pct"?: number | null,"id"?: string,"leads"?: number | null,"likes"?: number | null,"link_clicks"?: number | null,"performance_index"?: number | null,"post_id": string,"sales"?: number | null,"saves"?: number | null,"shares"?: number | null,"source"?: string,"user_id"?: string,"views"?: number | null
+                  }
+                  Update: {
+                    "avg_watch_pct"?: number | null,"collected_at"?: string,"comments"?: number | null,"created_at"?: string,"dms"?: number | null,"hold_3s_pct"?: number | null,"id"?: string,"leads"?: number | null,"likes"?: number | null,"link_clicks"?: number | null,"performance_index"?: number | null,"post_id"?: string,"sales"?: number | null,"saves"?: number | null,"shares"?: number | null,"source"?: string,"user_id"?: string,"views"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "results_post_id_fkey"
+      columns: ["post_id"]
 isOneToOne: false
       referencedRelation: "posts"
       referencedColumns: ["id"]

@@ -4,29 +4,10 @@ import { revalidatePath } from "next/cache";
 import * as z from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { getCurrentUser } from "@/lib/auth";
-import { PLATFORM_KEYS, type Platform } from "@/lib/constants";
+import { PLATFORM_KEYS, platformLabel } from "@/lib/constants";
+import { averagesSchema, recomputePerformanceIndexes } from "@/lib/results";
 
 const SIGNED_OUT: ActionState = { error: "You're signed out. Please log in again." };
-
-// Empty input → null; otherwise a non-negative number.
-const optionalNumber = (max?: number) =>
-  z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? null : typeof v === "string" ? Number(v.replace(/[,%\s]/g, "")) : v),
-    z
-      .number({ error: "Use numbers only." })
-      .min(0, "Can't be negative.")
-      .max(max ?? Number.MAX_SAFE_INTEGER, max ? `Must be ${max} or less.` : "Too large.")
-      .nullable(),
-  );
-
-const averagesSchema = z.object({
-  avg_views: optionalNumber(),
-  avg_hold_3s_pct: optionalNumber(100),
-  avg_watch_pct: optionalNumber(100),
-  avg_saves: optionalNumber(),
-  avg_shares: optionalNumber(),
-  avg_dms: optionalNumber(),
-});
 
 const brandSchema = z.object({
   handle: z.string().trim().max(100, "Handle is too long."),
@@ -54,7 +35,7 @@ export async function saveBrand(_prev: ActionState, formData: FormData): Promise
     const parsed = averagesSchema.safeParse(raw);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { error: `${labelFor(platform)} — ${String(issue.path[0]).replace("avg_", "").replaceAll("_", " ")}: ${issue.message}` };
+      return { error: `${platformLabel(platform)} — ${issue.message}` };
     }
     averageRows.push({ user_id: userId, platform, ...parsed.data, updated_at: new Date().toISOString() });
   }
@@ -75,10 +56,9 @@ export async function saveBrand(_prev: ActionState, formData: FormData): Promise
     return { error: "Couldn't save your averages. Please try again." };
   }
 
+  // Performance Index is relative to your averages, so past results are re-scored.
+  const rescored = await recomputePerformanceIndexes(supabase, userId, PLATFORM_KEYS);
   revalidatePath("/settings/brand");
-  return { ok: "Saved." };
-}
-
-function labelFor(platform: Platform) {
-  return { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube Shorts" }[platform];
+  if (rescored > 0) revalidatePath("/posts", "layout");
+  return { ok: rescored > 0 ? `Saved. Re-scored ${rescored} past result${rescored === 1 ? "" : "s"}.` : "Saved." };
 }

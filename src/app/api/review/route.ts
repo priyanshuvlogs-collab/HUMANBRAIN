@@ -5,6 +5,8 @@ import { buildSystemPrompt, loadBrainFiles } from "@/lib/brain";
 import { ReviewError, runReview } from "@/lib/claude";
 import { GOAL_KEYS, MAX_ACTIVE_PERSONAS, PLATFORM_KEYS, SCORE_CATEGORIES, isValidFormat } from "@/lib/constants";
 import { buildPlaceholderValues, postMessage, type PostInput } from "@/lib/context";
+import { loadRecentLessons } from "@/lib/learning";
+import { getProofExamples } from "@/lib/proof-library";
 import { SCHEMA_VERSION } from "@/lib/schema";
 import { computeTotalScore } from "@/lib/scoring";
 
@@ -72,15 +74,10 @@ export async function POST(request: Request) {
   const offerQuery = post.offerId
     ? supabase.from("offers").select("name, price, cta_type, cta_destination").eq("id", post.offerId).maybeSingle()
     : Promise.resolve({ data: null, error: null });
-  const [offerRes, brandRes, averagesRes, personasRes] = await Promise.all([
+  const [offerRes, brandRes, averagesRes, personasRes, proof, lessons] = await Promise.all([
     offerQuery,
     supabase.from("brand_settings").select("handle, niche, platforms").eq("user_id", userId).maybeSingle(),
-    supabase
-      .from("platform_averages")
-      .select("platform, avg_views, avg_hold_3s_pct, avg_watch_pct, avg_saves, avg_shares, avg_dms")
-      .eq("user_id", userId)
-      .eq("platform", post.platform)
-      .maybeSingle(),
+    supabase.from("platform_averages").select("*").eq("user_id", userId).eq("platform", post.platform).maybeSingle(),
     supabase
       .from("personas")
       .select("name, description, voice")
@@ -89,6 +86,9 @@ export async function POST(request: Request) {
       .order("sort_order")
       .order("created_at")
       .limit(MAX_ACTIVE_PERSONAS),
+    // Best/worst past posts on this platform, never including this post's own versions.
+    getProofExamples(supabase, userId, { platform: post.platform, excludeRootId: rootPostId }),
+    loadRecentLessons(supabase, userId, 5),
   ]);
   const loadError = offerRes.error ?? brandRes.error ?? averagesRes.error ?? personasRes.error;
   if (loadError) {
@@ -109,6 +109,8 @@ export async function POST(request: Request) {
         offer: offerRes.data,
         averages: averagesRes.data,
         personas: personasRes.data ?? [],
+        proof,
+        notes: lessons,
       }),
     );
   } catch (err) {

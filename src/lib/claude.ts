@@ -106,19 +106,21 @@ const realCaller: ClaudeCaller = async ({ system, messages, signal }) => {
   return stream.finalMessage();
 };
 
-const mockCaller: ClaudeCaller = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  return {
-    content: [{ type: "text", text: SAMPLE_REVIEW_REPLY, citations: null }],
-    stop_reason: "end_turn",
-    stop_details: null,
-    model: "mock (recorded reply)",
-    usage: { input_tokens: 0, output_tokens: 0 } as ClaudeReply["usage"],
+const mockCaller =
+  (reply: string): ClaudeCaller =>
+  async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return {
+      content: [{ type: "text", text: reply, citations: null }],
+      stop_reason: "end_turn",
+      stop_details: null,
+      model: "mock (recorded reply)",
+      usage: { input_tokens: 0, output_tokens: 0 } as ClaudeReply["usage"],
+    };
   };
-};
 
-export function defaultCaller(): ClaudeCaller {
-  return isMockMode() ? mockCaller : realCaller;
+export function defaultCaller(mockReply: string = SAMPLE_REVIEW_REPLY): ClaudeCaller {
+  return isMockMode() ? mockCaller(mockReply) : realCaller;
 }
 
 function textOf(reply: ClaudeReply): string {
@@ -128,14 +130,11 @@ function textOf(reply: ClaudeReply): string {
     .trim();
 }
 
-function assertNotRefused(reply: ClaudeReply) {
+function assertNotRefused(reply: ClaudeReply, task: string) {
   if (reply.stop_reason !== "refusal") return;
   const category = reply.stop_details?.category;
   const reason = category ? ` (flagged as ${category.replaceAll("_", " ")})` : "";
-  throw new ReviewError(
-    `Claude declined to review this post${reason}. Try rewording the content and run it again.`,
-    422,
-  );
+  throw new ReviewError(`Claude declined to ${task}${reason}. Try rewording the content and run it again.`, 422);
 }
 
 function addUsage(total: ReviewUsage, reply: ClaudeReply) {
@@ -146,18 +145,34 @@ function addUsage(total: ReviewUsage, reply: ClaudeReply) {
   total.cache_creation_input_tokens += reply.usage?.cache_creation_input_tokens ?? 0;
 }
 
+export type JsonParse<T> = (text: string) => { ok: true; value: T } | { ok: false; problem: string };
+
+export type JsonRunResult<T> = {
+  value: T;
+  rawResponse: string;
+  model: string;
+  usage: ReviewUsage;
+  retried: boolean;
+};
+
 /**
- * Runs one review: call Claude → parse the JSON block → if it's missing/invalid,
- * retry ONCE asking for the corrected JSON only.
+ * Calls Claude and parses the JSON block at the end of the reply.
+ * If it's missing/invalid, retries ONCE asking for the corrected JSON only.
+ * Used by reviews and by learning mode.
  */
-export async function runReview(input: {
+export async function runWithJsonRetry<T>(input: {
   system: string;
   userMessage: string;
+  parse: JsonParse<T>;
+  /** For error messages, e.g. "review this post". */
+  task: string;
+  /** Recorded reply used in mock mode. */
+  mockReply: string;
   call?: ClaudeCaller;
   now?: () => number;
   budgetMs?: number;
-}): Promise<ReviewRunResult> {
-  const call = input.call ?? defaultCaller();
+}): Promise<JsonRunResult<T>> {
+  const call = input.call ?? defaultCaller(input.mockReply);
   const now = input.now ?? Date.now;
   const deadline = now() + (input.budgetMs ?? TOTAL_BUDGET_MS);
   const usage: ReviewUsage = {
@@ -182,7 +197,7 @@ export async function runReview(input: {
   const userTurn: BetaMessageParam = { role: "user", content: input.userMessage };
 
   const first = await callWithinDeadline([userTurn]);
-  assertNotRefused(first);
+  assertNotRefused(first, input.task);
   const firstText = textOf(first);
   if (!firstText && first.stop_reason === "max_tokens") {
     // Asking the same question again would just burn the same budget.
@@ -191,14 +206,14 @@ export async function runReview(input: {
       502,
     );
   }
-  const firstParse = parseReviewReply(firstText);
+  const firstParse = input.parse(firstText);
   if (firstParse.ok) {
-    return { review: firstParse.review, rawResponse: firstText, model: first.model, usage, retried: false };
+    return { value: firstParse.value, rawResponse: firstText, model: first.model, usage, retried: false };
   }
 
   if (deadline - now() < MIN_RETRY_MS) {
     throw new ReviewError(
-      "Claude's reply couldn't be read and there wasn't time to retry. Please run the review again.",
+      "Claude's reply couldn't be read and there wasn't time to retry. Please try again.",
       502,
     );
   }
@@ -217,16 +232,37 @@ export async function runReview(input: {
     : [userTurn];
 
   const second = await callWithinDeadline(retryMessages);
-  assertNotRefused(second);
+  assertNotRefused(second, input.task);
   const secondText = textOf(second);
-  const secondParse = parseReviewReply(secondText);
+  const secondParse = input.parse(secondText);
   if (!secondParse.ok) {
-    console.error("[review] JSON still invalid after retry:", secondParse.problem);
-    throw new ReviewError("Claude's reply couldn't be read, even after a retry. Please run the review again.", 502);
+    console.error("[claude] JSON still invalid after retry:", secondParse.problem);
+    throw new ReviewError("Claude's reply couldn't be read, even after a retry. Please try again.", 502);
   }
 
   const rawResponse = firstText ? `${stripJsonBlock(firstText)}\n\n${secondText}`.trim() : secondText;
-  return { review: secondParse.review, rawResponse, model: second.model, usage, retried: true };
+  return { value: secondParse.value, rawResponse, model: second.model, usage, retried: true };
+}
+
+/** Runs one post review (brain prompt → JSON block → zod), with one JSON-only retry. */
+export async function runReview(input: {
+  system: string;
+  userMessage: string;
+  call?: ClaudeCaller;
+  now?: () => number;
+  budgetMs?: number;
+}): Promise<ReviewRunResult> {
+  const result = await runWithJsonRetry<ReviewView>({
+    ...input,
+    task: "review this post",
+    mockReply: SAMPLE_REVIEW_REPLY,
+    parse: (text) => {
+      const parsed = parseReviewReply(text);
+      return parsed.ok ? { ok: true, value: parsed.review } : parsed;
+    },
+  });
+  const { value, ...rest } = result;
+  return { review: value, ...rest };
 }
 
 /** The API error type, e.g. "overloaded_error" (mid-stream errors carry it on `type`, others in the body). */
