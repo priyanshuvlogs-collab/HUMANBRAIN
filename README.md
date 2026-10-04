@@ -39,7 +39,7 @@ Pick **one** option.
 **Option A: copy and paste (easiest)**
 1. In Supabase, open **SQL Editor** → **New query**.
 2. Open `supabase/migrations/20261003000000_init.sql` from this project, copy **everything**, paste it in, and click **Run**.
-3. Do the same with every other file in `supabase/migrations/`, **in name order** (the date in the name), e.g. `20261004000000_results_learning.sql` next. When you update the app later, run only the new files.
+3. Do the same with every other file in `supabase/migrations/`, **in name order** (the date in the name): `20261004000000_results_learning.sql`, then `20261004120000_phase2_hardening.sql`. When you update the app later, run only the new files.
 
 **Option B: command line**
 ```bash
@@ -151,7 +151,7 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
 
    Metrics you didn't record (or have no average for) are skipped and the rest re-weighted. No usable metric → no PI (add your averages). When you change your averages, every past PI is recalculated. PI bands: under 0.8 below average, 0.8–1.2 average, 1.2–2 above average, 2+ breakout.
 8. **Learning mode:** when you save results for a reviewed post, Claude compares its prediction with what happened (`prompts/learning-mode.md`) and writes a lesson. It runs in the background; the post page shows "Comparing…" and updates by itself, usually within a minute. If it fails, press **Try again**. The 5 newest lessons go into every future review.
-9. **CSV import (Import page):** bring in past posts with their numbers. Download the template, fill one row per post, upload, check the preview (rows with problems are listed and skipped), then import. Imported posts fill the proof library (they have no review, so no learning note). Importing the same file twice is safe: posts with the same platform, hook and date are skipped.
+9. **CSV import (Import page):** bring in past posts with their numbers. Download the template, fill one row per post, upload, check the preview (rows with problems are listed and skipped), then import. Imported posts fill the proof library (they have no review, so no learning note). Importing the same file twice is safe: posts with the same platform, hook and date are skipped. Each batch of rows is saved all-or-nothing. Semicolon-separated files with decimal commas (1.234,5) and Excel's Windows CSVs work too.
 
 > **Temporary output format:** the brain file was received without its final section (the JSON output spec). Until it's added, the app appends `prompts/provisional-output-format.md`, and the results page shows a small notice. Once the full brain file is in place, that file gets deleted and `src/lib/schema.ts` updated.
 
@@ -244,4 +244,5 @@ npm run typecheck
 | Posts page errors / "relation results does not exist" | Run the newer migration files too (step 3). |
 | No Performance Index on a post | Add your averages for that platform in Brand settings (for the metrics its goal uses). |
 | Learning note says it was cut off | Press **Try again**. |
-| CSV dates look wrong in the preview | Use YYYY-MM-DD. 09/01/2026 is read as month/day (Sep 1). |
+| CSV dates look wrong in the preview | Use YYYY-MM-DD. For dates like 03/09/2026 the order (day/month or month/day) is worked out from the whole file and shown above the preview. |
+| Odd characters (Don�t) in imported text | Save the file as "CSV UTF-8" in Excel. (Plain Excel CSVs are also understood.) |

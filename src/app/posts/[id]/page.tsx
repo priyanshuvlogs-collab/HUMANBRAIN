@@ -9,7 +9,7 @@ import { toDateInputValue } from "@/lib/dates";
 import { formatDate, formatMetric } from "@/lib/format";
 import { METRIC_KEYS, METRIC_LABELS, describePerformanceIndex, tierForPerformanceIndex } from "@/lib/performance";
 import { STALE_PENDING_MS, loadPostDetail, metricsOf, type CalibrationNoteRow } from "@/lib/posts";
-import { PostingForm, ResultsForm, RetryLearningButton } from "./PostForms";
+import { PostingDetails, ResultsForm, RetryLearningButton } from "./PostForms";
 
 // Learning mode runs after the "Save results" action responds (via after()), within this limit.
 export const maxDuration = 300;
@@ -112,11 +112,14 @@ export default async function PostPage({ params }: PageProps<"/posts/[id]">) {
   const actualTier = tierForPerformanceIndex(latestPi);
   // eslint-disable-next-line react-hooks/purity -- a per-request timestamp in a Server Component
   const now = Date.now();
-  const anyPending = notes.some((n) => n.status === "pending" && now - new Date(n.updated_at).getTime() <= STALE_PENDING_MS);
+  const pendingIds = notes
+    .filter((n) => n.status === "pending" && now - new Date(n.updated_at).getTime() <= STALE_PENDING_MS)
+    .map((n) => `${n.id}:${n.updated_at}`);
 
   return (
     <div className="space-y-8">
-      {anyPending && <AutoRefresh />}
+      {/* keyed by the pending notes, so a newly started analysis gets a fresh refresh window */}
+      {pendingIds.length > 0 && <AutoRefresh key={pendingIds.join(",")} />}
 
       <header className="card space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
@@ -200,20 +203,13 @@ export default async function PostPage({ params }: PageProps<"/posts/[id]">) {
       </Section>
 
       <Section title="Posting details">
-        <details className="card" open={post.status !== "posted"}>
-          <summary className="cursor-pointer text-sm font-semibold">
-            {post.status === "posted" ? "Edit date, link and video length" : "Mark as posted"}
-          </summary>
-          <div className="mt-4">
-            <PostingForm
-              postId={post.id}
-              postedAt={toDateInputValue(post.posted_at)}
-              externalPostId={post.external_post_id ?? ""}
-              videoLengthSec={post.video_length_sec}
-              isPosted={post.status === "posted"}
-            />
-          </div>
-        </details>
+        <PostingDetails
+          postId={post.id}
+          postedAt={toDateInputValue(post.posted_at)}
+          externalPostId={post.external_post_id ?? ""}
+          videoLengthSec={post.video_length_sec}
+          isPosted={post.status === "posted"}
+        />
       </Section>
 
       {notes.length > 0 && (

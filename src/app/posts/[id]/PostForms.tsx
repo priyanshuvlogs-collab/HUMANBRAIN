@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import ActionForm from "@/components/ActionForm";
 import { GOALS, type Goal } from "@/lib/constants";
 import { GOAL_WEIGHTS, METRIC_LABELS, type MetricKey } from "@/lib/performance";
@@ -32,9 +33,12 @@ export function ResultsForm({ postId, goal }: { postId: string; goal: string }) 
                     <label htmlFor={`metric-${key}`} className="mb-1 block text-xs font-medium text-zinc-600">
                       {METRIC_LABELS[key]}
                       {counted[key] != null && (
-                        <span className="ml-1 text-violet-700" aria-label="counts towards the Performance Index">
-                          ★
-                        </span>
+                        <>
+                          <span className="ml-1 text-violet-700" aria-hidden>
+                            ★
+                          </span>
+                          <span className="sr-only"> (counts towards the Performance Index)</span>
+                        </>
                       )}
                     </label>
                     <input id={`metric-${key}`} name={key} inputMode="decimal" className="input" autoComplete="off" />
@@ -60,13 +64,30 @@ export function ResultsForm({ postId, goal }: { postId: string; goal: string }) 
   );
 }
 
-export function PostingForm(props: {
+type PostingProps = {
   postId: string;
   postedAt: string;
   externalPostId: string;
   videoLengthSec: number | null;
   isPosted: boolean;
-}) {
+};
+
+/** Collapsible "Posting details" card. Keeps its own open state, so it doesn't snap shut after saving. */
+export function PostingDetails(props: PostingProps) {
+  const [open, setOpen] = useState(!props.isPosted);
+  return (
+    <details className="card" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary className="cursor-pointer text-sm font-semibold">
+        {props.isPosted ? "Edit date, link and video length" : "Mark as posted"}
+      </summary>
+      <div className="mt-4">
+        <PostingForm {...props} />
+      </div>
+    </details>
+  );
+}
+
+function PostingForm(props: PostingProps) {
   return (
     <ActionForm action={savePostingDetails} className="space-y-4">
       {(pending) => (

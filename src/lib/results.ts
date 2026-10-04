@@ -4,19 +4,27 @@ import * as z from "zod";
 import type { Goal } from "./constants";
 import { METRIC_KEYS, METRIC_LABELS, averageKey, computePerformanceIndex, type MetricKey, type Metrics } from "./performance";
 
-/** "12,000" → 12000, "62%" → 62, "$97" → 97, "" → null. */
-export function parseNumberInput(value: unknown): unknown {
+const BLANK_WORDS = new Set(["", "-", "–", "—", "na", "n/a", "none", "null"]);
+
+/**
+ * "12,000" → 12000, "62%" → 62, "$97" → 97, "1.2K" → 1200, "3M" → 3000000, "" / "N/A" → null.
+ * With `decimalComma` (European CSVs that use ";" between cells): "12.000" → 12000, "62,5" → 62.5.
+ */
+export function parseNumberInput(value: unknown, options: { decimalComma?: boolean } = {}): unknown {
   if (value == null) return null;
   if (typeof value === "number") return value;
   if (typeof value !== "string") return value;
-  const cleaned = value.replace(/[,%$\s]/g, "");
-  if (cleaned === "" || cleaned === "-") return null;
+  let cleaned = value.trim().replace(/[%$€£₹\s]/g, "");
+  if (BLANK_WORDS.has(cleaned.toLowerCase())) return null;
+  cleaned = options.decimalComma ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned.replace(/,/g, "");
+  const suffix = cleaned.match(/^(\d+(?:\.\d+)?)([kKmM])$/);
+  if (suffix) return Math.round(Number(suffix[1]) * (suffix[2].toLowerCase() === "k" ? 1_000 : 1_000_000));
   return Number(cleaned);
 }
 
 export function optionalNumber(label: string, max?: number) {
   return z.preprocess(
-    parseNumberInput,
+    (v) => parseNumberInput(v),
     z
       .number({ error: `${label}: use numbers only.` })
       .refine(Number.isFinite, `${label}: use numbers only.`)
@@ -75,12 +83,12 @@ export async function recomputePerformanceIndexes(supabase: SupabaseLike, userId
   );
 
   const PAGE = 1000; // Supabase returns at most 1,000 rows per request
-  let updated = 0;
+  const changed: { id: string; user_id: string; post_id: string; performance_index: number | null }[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data: rows, error } = await supabase
       .from("results")
       .select(
-        "id, performance_index, views, hold_3s_pct, avg_watch_pct, likes, comments, saves, shares, dms, link_clicks, leads, sales, posts!inner(goal, platform)",
+        "id, user_id, post_id, performance_index, views, hold_3s_pct, avg_watch_pct, likes, comments, saves, shares, dms, link_clicks, leads, sales, posts!inner(goal, platform)",
       )
       .eq("user_id", userId)
       .in("posts.platform", platforms)
@@ -88,17 +96,24 @@ export async function recomputePerformanceIndexes(supabase: SupabaseLike, userId
       .range(from, from + PAGE - 1);
     if (error) {
       console.error("[results] recompute load failed:", error);
-      return updated;
+      return 0;
     }
     for (const row of rows ?? []) {
       const metrics = toNumberRecord(row) as Metrics;
       const pi = computePerformanceIndex(row.posts.goal as Goal, metrics, averagesByPlatform.get(row.posts.platform) ?? null);
       const current = row.performance_index == null ? null : Number(row.performance_index);
-      if (pi === current) continue;
-      const { error: updateError } = await supabase.from("results").update({ performance_index: pi }).eq("id", row.id);
-      if (updateError) console.error("[results] recompute update failed:", updateError);
-      else updated++;
+      if (pi !== current) changed.push({ id: row.id, user_id: row.user_id, post_id: row.post_id, performance_index: pi });
     }
-    if (!rows || rows.length < PAGE) return updated;
+    if (!rows || rows.length < PAGE) break;
   }
+
+  // Write the new values in a few bulk requests (an upsert on id only touches performance_index).
+  let updated = 0;
+  for (let i = 0; i < changed.length; i += 500) {
+    const chunk = changed.slice(i, i + 500);
+    const { error } = await supabase.from("results").upsert(chunk, { onConflict: "id" });
+    if (error) console.error("[results] recompute update failed:", error);
+    else updated += chunk.length;
+  }
+  return updated;
 }

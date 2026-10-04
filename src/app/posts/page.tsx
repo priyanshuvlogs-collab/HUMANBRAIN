@@ -4,12 +4,14 @@ import { scoreColor } from "@/components/review/TierBadge";
 import { requireUser } from "@/lib/auth";
 import { formatLabel, platformLabel } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
-import { loadPostList } from "@/lib/posts";
+import { POSTS_PER_PAGE, loadPostList } from "@/lib/posts";
 
-export default async function PostsPage() {
+export default async function PostsPage({ searchParams }: PageProps<"/posts">) {
+  const pageParam = (await searchParams).page;
+  const page = Math.max(1, Math.floor(Number(Array.isArray(pageParam) ? pageParam[0] : pageParam) || 1));
   const { supabase, userId } = await requireUser();
-  const posts = await loadPostList(supabase, userId);
-  const withResults = posts.filter((p) => p.resultsCount > 0).length;
+  const { posts, total, withResults } = await loadPostList(supabase, userId, page);
+  const pages = Math.max(1, Math.ceil(total / POSTS_PER_PAGE));
 
   return (
     <div className="space-y-6">
@@ -17,7 +19,7 @@ export default async function PostsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Posts</h1>
           <p className="text-sm text-zinc-600">
-            Log what really happened. {withResults} of {posts.length} post{posts.length === 1 ? " has" : "s have"} results.
+            Log what really happened. {withResults} of {total} post{total === 1 ? " has" : "s have"} results.
           </p>
         </div>
         <Link href="/import" className="btn-secondary">
@@ -25,7 +27,7 @@ export default async function PostsPage() {
         </Link>
       </div>
 
-      {posts.length === 0 ? (
+      {total === 0 ? (
         <div className="card text-center">
           <p className="font-semibold">No posts yet</p>
           <p className="mt-1 text-sm text-zinc-600">Every reviewed post shows up here. You can also import past posts from a CSV.</p>
@@ -68,6 +70,28 @@ export default async function PostsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {pages > 1 && (
+        <nav className="flex items-center justify-between gap-3 text-sm" aria-label="Pages">
+          {page > 1 ? (
+            <Link href={`/posts?page=${page - 1}`} className="btn-secondary">
+              ← Newer
+            </Link>
+          ) : (
+            <span />
+          )}
+          <span className="text-zinc-500">
+            Page {page} of {pages}
+          </span>
+          {page < pages ? (
+            <Link href={`/posts?page=${page + 1}`} className="btn-secondary">
+              Older →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </nav>
       )}
     </div>
   );

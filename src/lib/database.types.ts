@@ -57,6 +57,12 @@ isOneToOne: false
       foreignKeyName: "calibration_notes_result_id_fkey"
       columns: ["result_id"]
 isOneToOne: false
+      referencedRelation: "latest_results"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "calibration_notes_result_id_fkey"
+      columns: ["result_id"]
+isOneToOne: false
       referencedRelation: "results"
       referencedColumns: ["id"]
     },{
@@ -172,10 +178,25 @@ isOneToOne: false
                 }
           }
           Views: {
-            [_ in never]: never
+            "latest_results": {
+                  Row: {
+                    "avg_watch_pct": number | null,"collected_at": string | null,"comments": number | null,"created_at": string | null,"dms": number | null,"format": string | null,"goal": string | null,"hold_3s_pct": number | null,"hook": string | null,"id": string | null,"leads": number | null,"likes": number | null,"link_clicks": number | null,"performance_index": number | null,"platform": string | null,"post_id": string | null,"root_id": string | null,"sales": number | null,"saves": number | null,"script": string | null,"shares": number | null,"user_id": string | null,"views": number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "results_post_id_fkey"
+      columns: ["post_id"]
+isOneToOne: false
+      referencedRelation: "posts"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
           }
           Functions: {
-            [_ in never]: never
+            "import_csv_batch":
+{ Args: { "items": Json }; Returns: number
+                           }
           }
           Enums: {
             [_ in never]: never

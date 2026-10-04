@@ -1,15 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { formatLabel, platformLabel } from "@/lib/constants";
 import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
   checkHeaders,
+  checkRecord,
   chunkRows,
+  decodeCsvBytes,
   parseCsvText,
-  validateCsvRow,
+  type CsvRecord,
+  type HeaderCheck,
+  type ImportOptions,
   type RowCheck,
 } from "@/lib/csv";
 import { describeMetrics, formatDate, truncate } from "@/lib/format";
@@ -17,10 +21,10 @@ import { importRows } from "./actions";
 
 type Parsed = {
   fileName: string;
-  headerErrors: string[];
-  ignored: string[];
+  header: HeaderCheck;
+  options: ImportOptions;
   checks: RowCheck[];
-  records: Record<string, string>[];
+  records: CsvRecord[];
   tooMany: boolean;
 };
 
@@ -35,8 +39,10 @@ export default function ImportClient() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, startImport] = useTransition();
+  const readId = useRef(0);
 
   async function onFile(file: File | undefined) {
+    const id = ++readId.current; // ignore a slower earlier read if another file is picked
     setParsed(null);
     setSummary(null);
     setImportError(null);
@@ -44,26 +50,27 @@ export default function ImportClient() {
     if (!file) return;
     if (file.size > MAX_IMPORT_BYTES) return setFileError("That file is over 5 MB. Split it into smaller files.");
     try {
-      const { headers, records } = parseCsvText(await file.text());
-      const { errors, ignored } = checkHeaders(headers);
+      const { headers, records, options } = parseCsvText(decodeCsvBytes(await file.arrayBuffer()));
+      if (id !== readId.current) return;
+      const header = checkHeaders(headers);
       const kept = records.slice(0, MAX_IMPORT_ROWS);
       setParsed({
         fileName: file.name,
-        headerErrors: errors,
-        ignored,
+        header,
+        options,
         records: kept,
-        // Row 1 of the spreadsheet is the header, so data starts on row 2.
-        checks: errors.length ? [] : kept.map((r, i) => validateCsvRow(r, i + 2)),
+        checks: header.errors.length ? [] : kept.map((r) => checkRecord(r, options)),
         tooMany: records.length > MAX_IMPORT_ROWS,
       });
     } catch {
-      setFileError("Couldn't read that file. Save it as CSV (comma-separated) and try again.");
+      if (id === readId.current) setFileError("Couldn't read that file. Save it as CSV (comma-separated) and try again.");
     }
   }
 
   function runImport() {
     if (!parsed) return;
-    const rows = parsed.checks.flatMap((c, i) => (c.ok ? [{ line: c.line, data: parsed.records[i] }] : []));
+    const options = parsed.options;
+    const rows = parsed.checks.flatMap((c, i) => (c.ok ? [{ line: c.line, data: parsed.records[i].data }] : []));
     const batches = chunkRows(rows);
     setSummary(null);
     setImportError(null);
@@ -75,7 +82,7 @@ export default function ImportClient() {
       for (const batch of batches) {
         let result;
         try {
-          result = await importRows(batch);
+          result = await importRows(batch, options);
         } catch {
           result = { ok: false as const, error: "The connection dropped. Check your internet and try again." };
         }
@@ -112,7 +119,10 @@ export default function ImportClient() {
           type="file"
           accept=".csv,text/csv"
           disabled={importing}
-          onChange={(e) => onFile(e.target.files?.[0])}
+          onChange={(e) => {
+            onFile(e.target.files?.[0]);
+            e.target.value = ""; // so choosing the same (fixed) file again still works
+          }}
           className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-violet-50 file:px-4 file:py-2 file:font-semibold file:text-violet-700 hover:file:bg-violet-100"
         />
         {fileError && (
@@ -122,11 +132,11 @@ export default function ImportClient() {
         )}
       </section>
 
-      {parsed && parsed.headerErrors.length > 0 && (
+      {parsed && parsed.header.errors.length > 0 && (
         <section className="card space-y-2 border-red-200" role="alert">
           <p className="font-semibold text-red-700">This file can&apos;t be imported yet</p>
           <ul className="list-disc pl-5 text-sm text-red-700">
-            {parsed.headerErrors.map((e) => (
+            {parsed.header.errors.map((e) => (
               <li key={e}>{e}</li>
             ))}
           </ul>
@@ -140,7 +150,7 @@ export default function ImportClient() {
         </section>
       )}
 
-      {parsed && parsed.headerErrors.length === 0 && !summary && (
+      {parsed && parsed.header.errors.length === 0 && !summary && (
         <section className="space-y-4">
           <div className="card space-y-2">
             <p className="font-semibold">
@@ -149,9 +159,17 @@ export default function ImportClient() {
             {parsed.tooMany && (
               <p className="text-sm text-amber-800">Only the first {MAX_IMPORT_ROWS.toLocaleString()} rows are used. Import the rest as a second file.</p>
             )}
-            {parsed.ignored.length > 0 && (
-              <p className="text-xs text-zinc-500">Ignored columns: {parsed.ignored.join(", ")}</p>
-            )}
+            {parsed.header.warnings.map((w) => (
+              <p key={w} className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {w}
+              </p>
+            ))}
+            <p className="text-xs text-zinc-500">
+              Dates like 03/09/2026 are read as{" "}
+              {parsed.options.dateOrder === "dmy" ? "day/month (3 Sep 2026)" : "month/day (Mar 9, 2026)"}, based on this file.
+              {parsed.options.decimalComma && " Numbers use a decimal comma (1.234,5)."}
+              {parsed.header.ignored.length > 0 && ` Ignored columns: ${parsed.header.ignored.join(", ")}.`}
+            </p>
             <button className="btn-primary" disabled={importing || ready.length === 0} onClick={runImport}>
               {importing && progress
                 ? `Importing… ${progress.done} of ${progress.total}`

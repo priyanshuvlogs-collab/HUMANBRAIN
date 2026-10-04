@@ -181,7 +181,7 @@ export async function runLearning(
       call: options.call,
     });
 
-    await supabase
+    const { error: saveError } = await supabase
       .from("calibration_notes")
       .update({
         status: "done",
@@ -197,6 +197,10 @@ export async function runLearning(
         updated_at: new Date().toISOString(),
       })
       .eq("id", noteId);
+    if (saveError) {
+      console.error("[learning] couldn't save the finished note:", saveError);
+      await fail("The analysis finished but couldn't be saved. Try again.");
+    }
   } catch (err) {
     const message = err instanceof ReviewError ? err.userMessage : "Learning mode failed unexpectedly. Try again.";
     if (!(err instanceof ReviewError)) console.error("[learning] unexpected error:", err);

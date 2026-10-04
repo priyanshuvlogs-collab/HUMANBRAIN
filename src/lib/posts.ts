@@ -28,14 +28,11 @@ export async function loadPostDetail(supabase: CurrentUser["supabase"], postId: 
   if (!data) return null;
 
   const { reviews, results, calibration_notes, offers, ...post } = data;
-  const sortedResults = [...results].sort(
-    (a, b) => b.collected_at.localeCompare(a.collected_at) || b.created_at.localeCompare(a.created_at),
-  );
   return {
     post,
     offerName: offers?.name ?? null,
     latestReview: newestFirst(reviews)[0] ?? null,
-    results: sortedResults,
+    results: newestFirst(results), // the newest save is the one that counts
     notes: newestFirst(calibration_notes),
   };
 }
@@ -43,29 +40,42 @@ export async function loadPostDetail(supabase: CurrentUser["supabase"], postId: 
 export type PostDetail = NonNullable<Awaited<ReturnType<typeof loadPostDetail>>>;
 export type CalibrationNoteRow = PostDetail["notes"][number];
 
-/** All posts, newest first, with their latest review score and latest Performance Index. */
-export async function loadPostList(supabase: CurrentUser["supabase"], userId: string) {
-  const { data, error } = await supabase
-    .from("posts")
-    .select(
-      "id, hook, platform, format, goal, status, source, posted_at, created_at, root_post_id, reviews(total_score, predicted_tier, created_at), results(performance_index, collected_at, created_at)",
-    )
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(300);
-  if (error) console.error("[posts] list failed:", error);
-  return (data ?? []).map(({ reviews, results, ...post }) => {
+export const POSTS_PER_PAGE = 100;
+
+/**
+ * One page of posts with their latest review score and current Performance Index.
+ * Drafts first, then posted posts by date posted (so a big CSV import doesn't bury your
+ * reviewed posts), then newest created.
+ */
+export async function loadPostList(supabase: CurrentUser["supabase"], userId: string, page = 1) {
+  const from = (Math.max(1, page) - 1) * POSTS_PER_PAGE;
+  const [list, withResults] = await Promise.all([
+    supabase
+      .from("posts")
+      .select(
+        "id, hook, platform, format, goal, status, source, posted_at, created_at, root_post_id, reviews(total_score, predicted_tier, created_at), results(performance_index, created_at)",
+        { count: "exact" },
+      )
+      .eq("user_id", userId)
+      .order("posted_at", { ascending: false, nullsFirst: true })
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, from + POSTS_PER_PAGE - 1),
+    supabase
+      .from("posts")
+      .select("id, results!inner(id)", { count: "exact", head: true })
+      .eq("user_id", userId),
+  ]);
+  if (list.error) console.error("[posts] list failed:", list.error);
+  const posts = (list.data ?? []).map(({ reviews, results, ...post }) => {
     const review = newestFirst(reviews)[0] ?? null;
-    const result =
-      [...results].sort(
-        (a, b) => b.collected_at.localeCompare(a.collected_at) || b.created_at.localeCompare(a.created_at),
-      )[0] ?? null;
+    const result = newestFirst(results)[0] ?? null;
     return {
       ...post,
       score: review ? Number(review.total_score) : null,
       predictedTier: review?.predicted_tier ?? null,
       performanceIndex: result?.performance_index == null ? null : Number(result.performance_index),
-      resultsCount: results.length,
     };
   });
+  return { posts, total: list.count ?? posts.length, withResults: withResults.count ?? 0 };
 }

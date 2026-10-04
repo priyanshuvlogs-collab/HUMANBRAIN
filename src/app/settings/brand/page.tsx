@@ -3,6 +3,9 @@ import type { Platform } from "@/lib/constants";
 import { METRIC_KEYS, averageKey } from "@/lib/performance";
 import BrandForm from "./BrandForm";
 
+// Saving averages re-scores every past result (bulk writes); allow a little longer than the default.
+export const maxDuration = 60;
+
 export default async function BrandSettingsPage() {
   const { supabase, userId } = await requireUser();
   const [{ data: brand }, { data: averages }] = await Promise.all([

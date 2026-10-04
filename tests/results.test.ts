@@ -9,10 +9,24 @@ describe("parseNumberInput", () => {
     [" 1 200 ", 1200],
     ["", null],
     ["-", null],
+    ["N/A", null],
+    ["1.2K", 1200],
+    ["3m", 3000000],
+    ["₹1,500", 1500],
     [null, null],
     [5, 5],
   ])("%j → %j", (input, expected) => {
     expect(parseNumberInput(input)).toBe(expected);
+  });
+
+  it("decimal-comma mode for European files", () => {
+    expect(parseNumberInput("12.000", { decimalComma: true })).toBe(12000);
+    expect(parseNumberInput("62,5", { decimalComma: true })).toBe(62.5);
+    expect(parseNumberInput("1.234,5", { decimalComma: true })).toBe(1234.5);
+  });
+
+  it("garbage stays invalid", () => {
+    expect(parseNumberInput("lots")).toBeNaN();
   });
 });
 
@@ -57,7 +71,7 @@ describe("averagesSchema", () => {
 
 /** A tiny stand-in for the Supabase query builder: enough for recomputePerformanceIndexes. */
 function fakeSupabase(averages: Record<string, unknown>[], results: Record<string, unknown>[]) {
-  const updates: { id: unknown; performance_index: unknown }[] = [];
+  const upserts: { rows: unknown[]; onConflict?: string }[] = [];
   const from = (table: string) => {
     const query = {
       select: () => query,
@@ -66,42 +80,45 @@ function fakeSupabase(averages: Record<string, unknown>[], results: Record<strin
       order: () => query,
       range: async (from: number, to: number) => ({ data: results.slice(from, to + 1), error: null }),
       then: (resolve: (v: unknown) => void) => resolve({ data: table === "platform_averages" ? averages : [], error: null }),
-      update: (values: { performance_index: unknown }) => ({
-        eq: async (_col: string, id: unknown) => {
-          updates.push({ id, performance_index: values.performance_index });
-          return { error: null };
-        },
-      }),
+      upsert: async (rows: unknown[], options: { onConflict?: string }) => {
+        upserts.push({ rows, onConflict: options.onConflict });
+        return { error: null };
+      },
     };
     return query;
   };
-  return { client: { from }, updates };
+  return { client: { from }, upserts };
 }
 
 describe("recomputePerformanceIndexes", () => {
   it("re-scores results against new averages and only writes the ones that changed", async () => {
-    const { client, updates } = fakeSupabase(
+    const { client, upserts } = fakeSupabase(
       [{ platform: "instagram", avg_views: 1000, avg_watch_pct: "40" }],
       [
         // views goal: 2000/1000 = 2 (w .6), 40/40 = 1 (w .4) → 1.6 (unchanged)
-        { id: "r1", performance_index: "1.60", views: 2000, avg_watch_pct: 40, posts: { goal: "views", platform: "instagram" } },
+        { id: "r1", user_id: "u", post_id: "p1", performance_index: "1.60", views: 2000, avg_watch_pct: 40, posts: { goal: "views", platform: "instagram" } },
         // was 1.00, now 500/1000 = 0.5 (only views usable)
-        { id: "r2", performance_index: "1.00", views: "500", avg_watch_pct: null, posts: { goal: "views", platform: "instagram" } },
+        { id: "r2", user_id: "u", post_id: "p2", performance_index: "1.00", views: "500", avg_watch_pct: null, posts: { goal: "views", platform: "instagram" } },
         // no averages for TikTok → null
-        { id: "r3", performance_index: 2, views: 900, posts: { goal: "views", platform: "tiktok" } },
+        { id: "r3", user_id: "u", post_id: "p3", performance_index: 2, views: 900, posts: { goal: "views", platform: "tiktok" } },
       ],
     );
-    const changed = await recomputePerformanceIndexes(client, "user-1", ["instagram", "tiktok"]);
+    const changed = await recomputePerformanceIndexes(client, "u", ["instagram", "tiktok"]);
     expect(changed).toBe(2);
-    expect(updates).toEqual([
-      { id: "r2", performance_index: 0.5 },
-      { id: "r3", performance_index: null },
+    expect(upserts).toEqual([
+      {
+        onConflict: "id",
+        rows: [
+          { id: "r2", user_id: "u", post_id: "p2", performance_index: 0.5 },
+          { id: "r3", user_id: "u", post_id: "p3", performance_index: null },
+        ],
+      },
     ]);
   });
 
   it("does nothing for no platforms", async () => {
-    const { client, updates } = fakeSupabase([], []);
-    expect(await recomputePerformanceIndexes(client, "user-1", [])).toBe(0);
-    expect(updates).toEqual([]);
+    const { client, upserts } = fakeSupabase([], []);
+    expect(await recomputePerformanceIndexes(client, "u", [])).toBe(0);
+    expect(upserts).toEqual([]);
   });
 });

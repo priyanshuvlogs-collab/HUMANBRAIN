@@ -18,7 +18,8 @@ export function describeMetrics(metrics: Metrics): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  // UTC: dates are stored at noon UTC, so the calendar day reads the same everywhere.
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
 /** Keeps text short for prompts and tables. */

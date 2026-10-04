@@ -25,9 +25,10 @@ export default function ImportPage() {
           </li>
           <li>Format is optional: blank means reel / video / short.</li>
           <li>
-            Dates: use YYYY-MM-DD, e.g. 2026-09-14. A date like 09/01/2026 is read as month/day (Sep 1). Check the preview.
+            Dates: YYYY-MM-DD (e.g. 2026-09-14) is safest. For dates like 03/09/2026, the app works out from the whole
+            file whether it&apos;s day/month or month/day and tells you which. Check the preview.
           </li>
-          <li>Numbers can include commas or % signs. Leave a cell blank if you don&apos;t have it.</li>
+          <li>Numbers can include commas, % signs or K/M (1.2K). Leave a cell blank (or N/A) if you don&apos;t have it.</li>
           <li>Importing the same file twice is safe — posts already imported are skipped.</li>
         </ul>
       </section>
