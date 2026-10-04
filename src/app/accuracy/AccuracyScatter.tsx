@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, XAxis, YAxis } from "recharts";
 import type { ScatterShapeProps } from "recharts/types/util/ScatterUtils";
-import type { Verdict } from "@/lib/accuracy";
+import { VERDICT_LABELS, type Verdict } from "@/lib/accuracy";
 
 export type ScatterPoint = {
   postId: string;
@@ -19,10 +19,10 @@ export type ScatterPoint = {
 
 // Categorical slots 1–3 of the validated palette (all-pairs safe; see the dataviz palette).
 // Colour follows the verdict, never its rank, so filtering never repaints a group.
-export const VERDICT_STYLES: Record<Verdict, { label: string; color: string }> = {
-  right: { label: "Right tier", color: "#2a78d6" },
-  too_high: { label: "Predicted too high", color: "#eb6834" },
-  too_low: { label: "Predicted too low", color: "#1baf7a" },
+const VERDICT_STYLES: Record<Verdict, { label: string; color: string }> = {
+  right: { label: VERDICT_LABELS.right, color: "#2a78d6" },
+  too_high: { label: VERDICT_LABELS.too_high, color: "#eb6834" },
+  too_low: { label: VERDICT_LABELS.too_low, color: "#1baf7a" },
 };
 const VERDICTS: Verdict[] = ["right", "too_high", "too_low"];
 
@@ -38,9 +38,12 @@ function yAxisFor(maxPi: number): { max: number; ticks: number[] } {
 }
 
 type Handlers = {
-  onShow: (point: ScatterPoint, x: number, y: number) => void;
-  onHide: (postId: string) => void;
-  onOpen: (postId: string) => void;
+  onHover: (point: ScatterPoint, x: number, y: number) => void;
+  onUnhover: (postId: string) => void;
+  onFocusDot: (point: ScatterPoint, x: number, y: number) => void;
+  onBlurDot: (postId: string) => void;
+  onPointerType: (type: string) => void;
+  onActivate: (point: ScatterPoint, x: number, y: number) => void;
 };
 
 /**
@@ -48,7 +51,15 @@ type Handlers = {
  * ring are drawn on top by the parent), so a focused or clicked dot is never swapped out
  * under the pointer or the keyboard.
  */
-const ScatterPlot = memo(function ScatterPlot({ points, onShow, onHide, onOpen }: { points: ScatterPoint[] } & Handlers) {
+const ScatterPlot = memo(function ScatterPlot({
+  points,
+  onHover,
+  onUnhover,
+  onFocusDot,
+  onBlurDot,
+  onPointerType,
+  onActivate,
+}: { points: ScatterPoint[] } & Handlers) {
   const { max, ticks } = useMemo(() => yAxisFor(Math.max(0, ...points.map((p) => p.pi))), [points]);
   const byVerdict = useMemo(
     () => Object.fromEntries(VERDICTS.map((v) => [v, points.filter((p) => p.verdict === v)])) as Record<Verdict, ScatterPoint[]>,
@@ -67,15 +78,17 @@ const ScatterPlot = memo(function ScatterPlot({ points, onShow, onHide, onOpen }
           tabIndex={0}
           aria-label={`${point.hook}. Predicted ${point.score} out of 100, ${point.predicted}. Real Performance Index ${point.pi.toFixed(2)}, ${point.actual}. Open post.`}
           style={{ cursor: "pointer", outline: "none" }}
-          onMouseEnter={() => onShow(point, cx, cy)}
-          onMouseLeave={() => onHide(point.postId)}
-          onFocus={() => onShow(point, cx, cy)}
-          onBlur={() => onHide(point.postId)}
-          onClick={() => onOpen(point.postId)}
+          onMouseEnter={() => onHover(point, cx, cy)}
+          onMouseLeave={() => onUnhover(point.postId)}
+          onFocus={() => onFocusDot(point, cx, cy)}
+          onBlur={() => onBlurDot(point.postId)}
+          onPointerDown={(e) => onPointerType(e.pointerType)}
+          onClick={() => onActivate(point, cx, cy)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
-              onOpen(point.postId);
+              onPointerType("keyboard");
+              onActivate(point, cx, cy);
             }
           }}
         >
@@ -85,12 +98,13 @@ const ScatterPlot = memo(function ScatterPlot({ points, onShow, onHide, onOpen }
         </g>
       );
     },
-    [onShow, onHide, onOpen],
+    [onHover, onUnhover, onFocusDot, onBlurDot, onPointerType, onActivate],
   );
 
   return (
     <ResponsiveContainer width="100%" height={HEIGHT}>
-      <ScatterChart margin={{ top: 12, right: 16, bottom: 24, left: 0 }}>
+      {/* accessibilityLayer off: each dot is already its own focusable link */}
+      <ScatterChart accessibilityLayer={false} margin={{ top: 12, right: 16, bottom: 24, left: 0 }}>
         <CartesianGrid stroke={INK.grid} strokeWidth={1} />
         <XAxis
           type="number"
@@ -133,15 +147,50 @@ const ScatterPlot = memo(function ScatterPlot({ points, onShow, onHide, onOpen }
  */
 export default function AccuracyScatter({ points }: { points: ScatterPoint[] }) {
   const router = useRouter();
-  const [active, setActive] = useState<{ point: ScatterPoint; x: number; y: number } | null>(null);
+  // w = the chart's width when the tooltip opened (to keep the tooltip on screen).
+  type Shown = { point: ScatterPoint; x: number; y: number; w: number };
+  // Hover and keyboard focus are tracked apart, so moving the mouse never hides the focus ring.
+  const [hovered, setHovered] = useState<Shown | null>(null);
+  const [focused, setFocused] = useState<Shown | null>(null);
+  const active = hovered ?? focused;
+  // The dot the last touch tap "armed" (its details are showing); tapping it again opens it.
+  const armed = useRef<string | null>(null);
+  const pointerType = useRef("mouse");
+  const wrapper = useRef<HTMLDivElement>(null);
+  const shown = useCallback(
+    (point: ScatterPoint, x: number, y: number): Shown => ({ point, x, y, w: wrapper.current?.clientWidth ?? 640 }),
+    [],
+  );
   const counts = Object.fromEntries(VERDICTS.map((v) => [v, points.filter((p) => p.verdict === v).length])) as Record<
     Verdict,
     number
   >;
 
-  const onShow = useCallback((point: ScatterPoint, x: number, y: number) => setActive({ point, x, y }), []);
-  const onHide = useCallback((postId: string) => setActive((a) => (a?.point.postId === postId ? null : a)), []);
-  const onOpen = useCallback((postId: string) => router.push(`/posts/${postId}`), [router]);
+  const onHover = useCallback((point: ScatterPoint, x: number, y: number) => setHovered(shown(point, x, y)), [shown]);
+  const onUnhover = useCallback((id: string) => setHovered((h) => (h?.point.postId === id ? null : h)), []);
+  const onFocusDot = useCallback((point: ScatterPoint, x: number, y: number) => setFocused(shown(point, x, y)), [shown]);
+  const onBlurDot = useCallback((id: string) => setFocused((f) => (f?.point.postId === id ? null : f)), []);
+  const onPointerType = useCallback((type: string) => (pointerType.current = type), []);
+  // On touch there's no hover: the first tap shows the details, a second tap on the same dot opens it.
+  const onActivate = useCallback(
+    (point: ScatterPoint, x: number, y: number) => {
+      if (pointerType.current === "touch" && armed.current !== point.postId) {
+        armed.current = point.postId;
+        setHovered(shown(point, x, y));
+        return;
+      }
+      armed.current = null;
+      router.push(`/posts/${point.postId}`);
+    },
+    [router, shown],
+  );
+
+  // Keep the tooltip inside the chart on narrow screens.
+  const width = active?.w ?? 640;
+  const tipWidth = Math.min(256, width - 8);
+  const tipLeft = active
+    ? Math.max(4, Math.min(width - tipWidth - 4, active.x > width / 2 ? active.x - 16 - tipWidth : active.x + 16))
+    : 0;
 
   return (
     <div className="space-y-3">
@@ -155,8 +204,16 @@ export default function AccuracyScatter({ points }: { points: ScatterPoint[] }) 
         ))}
       </ul>
 
-      <div className="relative" onMouseLeave={() => setActive(null)}>
-        <ScatterPlot points={points} onShow={onShow} onHide={onHide} onOpen={onOpen} />
+      <div ref={wrapper} className="relative" onMouseLeave={() => pointerType.current !== "touch" && setHovered(null)}>
+        <ScatterPlot
+          points={points}
+          onHover={onHover}
+          onUnhover={onUnhover}
+          onFocusDot={onFocusDot}
+          onBlurDot={onBlurDot}
+          onPointerType={onPointerType}
+          onActivate={onActivate}
+        />
         {active && (
           <span
             className="pointer-events-none absolute h-[18px] w-[18px] rounded-full border-2 border-violet-600"
@@ -167,12 +224,9 @@ export default function AccuracyScatter({ points }: { points: ScatterPoint[] }) 
 
         {active && (
           <div
-            className="pointer-events-none absolute z-10 w-64 max-w-[calc(100%-1rem)] rounded-lg border border-zinc-200 bg-white p-3 text-xs shadow-lg"
-            style={{
-              top: Math.max(0, active.y - 12),
-              ...(active.x > 200 ? { right: `calc(100% - ${active.x - 16}px)` } : { left: active.x + 16 }),
-            }}
-            role="status"
+            className="pointer-events-none absolute z-10 rounded-lg border border-zinc-200 bg-white p-3 text-xs shadow-lg"
+            style={{ top: Math.max(0, active.y - 12), left: tipLeft, width: tipWidth }}
+            aria-hidden // the focused dot's own label already says all of this
           >
             <p className="text-sm font-semibold text-zinc-900">
               PI {active.point.pi.toFixed(2)} · Score {active.point.score}

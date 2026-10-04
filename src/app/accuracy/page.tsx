@@ -4,6 +4,7 @@ import { PerformanceIndexValue } from "@/components/results/PerformanceIndex";
 import {
   MIN_POSTS_FOR_ACCURACY,
   STRENGTH_LABELS,
+  VERDICT_LABELS,
   computeAccuracy,
   explainAccuracy,
   roundRho,
@@ -71,7 +72,9 @@ function MissList({ title, empty, rows, total }: { title: string; empty: string;
           ))}
         </ul>
       )}
-      {total > rows.length && <p className="text-xs text-zinc-500">…and {total - rows.length} more in the data table below.</p>}
+      {total > rows.length && (
+        <p className="text-xs text-zinc-500">…and {total - rows.length} more under &ldquo;Show the data&rdquo; above.</p>
+      )}
     </Card>
   );
 }
@@ -127,7 +130,12 @@ export default async function AccuracyPage({ searchParams }: PageProps<"/accurac
         })}
       </nav>
 
-      {summary.count === 0 ? (
+      {data.error ? (
+        <div className="card" role="alert">
+          <p className="font-semibold text-red-700">Couldn&apos;t load your results</p>
+          <p className="mt-1 text-sm text-zinc-600">Something went wrong while loading. Refresh the page to try again.</p>
+        </div>
+      ) : summary.count === 0 ? (
         <div className="card text-center">
           <p className="font-semibold">Nothing to compare yet</p>
           <p className="mt-1 text-sm text-zinc-600">
@@ -204,7 +212,7 @@ export default async function AccuracyPage({ searchParams }: PageProps<"/accurac
 
           <Card
             title="Predicted score vs real result"
-            subtitle="Each dot is a post. Higher dots did better than your average; dots further right were scored higher. Click a dot to open the post."
+            subtitle="Each dot is a post. Dots above the “Your average” line beat your usual results; dots further right were scored higher. Click a dot (tap twice on a phone) to open the post."
           >
             <AccuracyScatter points={scatterPoints} />
             <details className="rounded-lg border border-zinc-200">
@@ -220,6 +228,7 @@ export default async function AccuracyPage({ searchParams }: PageProps<"/accurac
                       <th className="px-3 py-2 font-medium">Predicted</th>
                       <th className="px-3 py-2 font-medium">PI</th>
                       <th className="px-3 py-2 font-medium">Actual</th>
+                      <th className="px-3 py-2 font-medium">Verdict</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 tabular-nums">
@@ -239,6 +248,7 @@ export default async function AccuracyPage({ searchParams }: PageProps<"/accurac
                           <td className="whitespace-nowrap px-3 py-2">{TIER_LABELS[p.predictedTier]}</td>
                           <td className="px-3 py-2">{p.pi.toFixed(2)}</td>
                           <td className="whitespace-nowrap px-3 py-2">{TIER_LABELS[p.actualTier]}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{VERDICT_LABELS[verdictOf(p)]}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -261,13 +271,13 @@ export default async function AccuracyPage({ searchParams }: PageProps<"/accurac
           <div className="grid gap-6 lg:grid-cols-2">
             <MissList
               title="Predicted high, flopped"
-              empty="None: no post did worse than its predicted tier."
+              empty="None yet: no post the brain rated higher landed average or below."
               rows={summary.misses.overrated}
               total={summary.misses.overratedTotal}
             />
             <MissList
               title="Predicted low, took off"
-              empty="None: no post beat its predicted tier."
+              empty="None yet: no post the brain rated lower landed above average."
               rows={summary.misses.underrated}
               total={summary.misses.underratedTotal}
             />

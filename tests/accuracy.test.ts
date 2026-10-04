@@ -159,3 +159,18 @@ describe("computeAccuracy", () => {
     });
   });
 });
+
+describe("misses follow the spec literally", () => {
+  it("a post predicted Breakout that landed Above average didn't flop; Below → Average didn't take off", () => {
+    const s = computeAccuracy([point(85, 1.9, "BREAKOUT", "ABOVE"), point(30, 0.9, "BELOW", "AVERAGE"), point(80, 0.9, "BREAKOUT", "AVERAGE")]);
+    expect(s.misses.overrated.map((p) => p.score)).toEqual([80]);
+    expect(s.misses.underrated).toEqual([]);
+  });
+
+  it("a category scored on too few posts reports how many it has", () => {
+    const pts = Array.from({ length: 6 }, (_, i) =>
+      point(40 + i * 10, 0.5 + i * 0.3, "AVERAGE", "AVERAGE", i < 4 ? { hook: i + 3 } : null),
+    );
+    expect(computeAccuracy(pts).categories.find((c) => c.category === "hook")).toEqual({ category: "hook", rho: null, n: 4 });
+  });
+});

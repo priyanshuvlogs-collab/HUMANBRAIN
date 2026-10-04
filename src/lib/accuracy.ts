@@ -97,6 +97,12 @@ export function explainAccuracy(rho: number): string {
 
 export type Verdict = "right" | "too_high" | "too_low";
 
+export const VERDICT_LABELS: Record<Verdict, string> = {
+  right: "Right tier",
+  too_high: "Predicted too high",
+  too_low: "Predicted too low",
+};
+
 /** Positive = predicted a better tier than happened (overrated); negative = underrated. */
 export function tierGap(point: Pick<AccuracyPoint, "predictedTier" | "actualTier">): number {
   return TIERS.indexOf(point.predictedTier) - TIERS.indexOf(point.actualTier);
@@ -160,13 +166,15 @@ export function computeAccuracy(points: AccuracyPoint[]): AccuracySummary {
     withinOne: gaps.filter((g) => Math.abs(g) <= 1).length,
   };
 
-  // Biggest misses: furthest tier gap first; among equals, the most confident-looking
+  // Biggest misses, furthest tier gap first; among equals, the most confident-looking
   // prediction (overrated: highest score, worst result; underrated: lowest score, best result).
+  // "Predicted high but flopped": predicted better than happened AND it landed average or below.
+  // "Predicted low but took off": predicted worse than happened AND it landed above average or better.
   const overratedAll = points
-    .filter((p) => tierGap(p) > 0)
+    .filter((p) => tierGap(p) > 0 && (p.actualTier === "BELOW" || p.actualTier === "AVERAGE"))
     .sort((a, b) => tierGap(b) - tierGap(a) || b.score - a.score || a.pi - b.pi);
   const underratedAll = points
-    .filter((p) => tierGap(p) < 0)
+    .filter((p) => tierGap(p) < 0 && (p.actualTier === "ABOVE" || p.actualTier === "BREAKOUT"))
     .sort((a, b) => tierGap(a) - tierGap(b) || b.pi - a.pi || a.score - b.score);
 
   return {

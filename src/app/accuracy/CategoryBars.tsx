@@ -1,4 +1,4 @@
-import { STRENGTH_LABELS, roundRho, strengthOf, type CategoryAccuracy } from "@/lib/accuracy";
+import { MIN_POSTS_FOR_ACCURACY, STRENGTH_LABELS, roundRho, strengthOf, type CategoryAccuracy } from "@/lib/accuracy";
 import { SCORE_LABELS } from "@/lib/constants";
 
 // Diverging pair from the validated palette: blue = lines up with results, red = runs against them.
@@ -7,6 +7,9 @@ const NEGATIVE = "#e34948";
 
 function sentence(c: CategoryAccuracy): string {
   const label = SCORE_LABELS[c.category];
+  if (c.rho == null && c.n < MIN_POSTS_FOR_ACCURACY) {
+    return `${label}: needs ${MIN_POSTS_FOR_ACCURACY} posts with a full scorecard (has ${c.n}).`;
+  }
   if (c.rho == null) return `${label}: not enough variety in the scores yet (${c.n} posts).`;
   const r = roundRho(c.rho);
   const strength = STRENGTH_LABELS[strengthOf(c.rho)].toLowerCase();
