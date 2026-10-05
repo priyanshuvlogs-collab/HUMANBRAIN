@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReviewLoading from "@/components/ReviewLoading";
 import { useReviewRequest } from "@/components/useReviewRequest";
 import { GOALS, GOAL_KEYS, PLATFORMS, PLATFORM_KEYS, type Goal, type Platform } from "@/lib/constants";
+import { parseLink } from "@/lib/link-parse";
 
 type ExtractResult = {
   sourceUrl: string;
@@ -45,16 +46,12 @@ const COPY = {
   },
 } as const;
 
-/** A link typed into the box, as an http(s) URL, or null. */
+const MAX_SOURCE_URL = 2000; // the server's limit
+
+/** A link typed into the box, as an http(s) URL the server accepts, or null (same rules as the link reader). */
 function typedLink(text: string): string | null {
-  const raw = text.trim();
-  if (!raw) return null;
-  try {
-    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
-    return (url.protocol === "https:" || url.protocol === "http:") && url.hostname.includes(".") ? url.toString() : null;
-  } catch {
-    return null;
-  }
+  const url = parseLink(text);
+  return url && url.href.length <= MAX_SOURCE_URL ? url.href : null;
 }
 
 export default function NewReviewForm({ offers, defaultPlatform }: { offers: Offer[]; defaultPlatform: Platform }) {
@@ -67,6 +64,11 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
   const [onScreenText, setOnScreenText] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const hookInput = useRef<HTMLInputElement>(null);
+  const linkInput = useRef<HTMLInputElement>(null);
+  // True once the user picks a page type/format themselves: a link's guess never overrides it.
+  const formatChosen = useRef(false);
+  // Where focus should go after the next render (once the fields are enabled again).
+  const pendingFocus = useRef<"link" | "hook" | null>(null);
   const { run, running, error } = useReviewRequest();
 
   // "Start from a link": fills the fields from a social post or web page.
@@ -80,8 +82,11 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
   const copy = isPage ? COPY.page : COPY.post;
   const formats = PLATFORMS[platform].formats as Record<string, string>;
 
-  /** Reads the link and fills the form. Returns what was read (null on failure). */
-  async function fetchLink(): Promise<ExtractResult | null> {
+  /**
+   * Reads the link and fills the form. Returns what was read (null on failure), with the
+   * user's own headline/hook and chosen format kept when they already set them.
+   */
+  async function fetchLink(options: { keepHook?: string } = {}): Promise<ExtractResult | null> {
     if (!link.trim() || fetching) return null;
     setFetching(true);
     setLinkError(null);
@@ -98,14 +103,19 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
         setLinkError(data?.error ?? "Couldn't read that link. Paste the text instead.");
         return null;
       }
-      setPlatform(data.platform);
-      setFormat(data.format);
-      setHook(data.hook);
-      setScript(data.script);
-      setOnScreenText(data.onScreenText);
-      setSource({ url: data.sourceUrl, videoLengthSec: data.videoLengthSec });
-      setLinkNotes(data.notes);
-      return data;
+      const result: ExtractResult = {
+        ...data,
+        format: data.platform === platform && formatChosen.current ? format : data.format,
+        hook: options.keepHook?.trim() ? options.keepHook : data.hook,
+      };
+      setPlatform(result.platform);
+      setFormat(result.format);
+      setHook(result.hook);
+      setScript(result.script);
+      setOnScreenText(result.onScreenText);
+      setSource({ url: result.sourceUrl, videoLengthSec: result.videoLengthSec });
+      setLinkNotes(result.notes);
+      return result;
     } catch {
       setLinkError("Lost connection. Check your internet and try again.");
       return null;
@@ -128,6 +138,8 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
         ...fields,
         // Pages have no on-screen text; don't send a leftover value from a post.
         onScreenText: fields.platform === "website" ? "" : fields.onScreenText,
+        // The source is only a reference: never let an over-long one fail the review.
+        sourceUrl: fields.sourceUrl && fields.sourceUrl.length <= MAX_SOURCE_URL ? fields.sourceUrl : null,
         goal,
         offerId: offerId || null,
       },
@@ -135,32 +147,57 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
     );
   }
 
+  // Runs after every render; acts only when a focus move is pending and the fields are usable.
+  useEffect(() => {
+    if (!pendingFocus.current || fetching || running) return;
+    const el = pendingFocus.current === "link" ? linkInput.current : hookInput.current;
+    pendingFocus.current = null;
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    el?.focus({ preventScroll: true });
+  });
+
+  /** Enough came from the link to review without asking the user anything? */
+  function isComplete(data: ExtractResult): boolean {
+    if (!data.hook.trim()) return false;
+    if (data.platform === "website") return data.found.pageText && data.script.trim().length >= 300;
+    // "[Music]"-only captions aren't a script.
+    return data.found.transcript && data.script.replace(/\[[^\]]*\]/g, " ").trim().length > 0;
+  }
+
   async function submit() {
     setFormError(null);
-    if (hook.trim()) {
+    const pendingLink = typedLink(link);
+    // A link that hasn't been read yet, with no copy typed: read it (even if a headline/hook was typed).
+    const needsRead = !!pendingLink && pendingLink !== source?.url && !script.trim();
+
+    if (hook.trim() && !needsRead) {
       review({
         platform,
         format,
         hook,
         script,
         onScreenText,
-        // A link typed but never fetched is still kept as the post's source.
-        sourceUrl: source?.url ?? typedLink(link),
+        // A link typed but never read is still kept as the post's source.
+        sourceUrl: source?.url ?? pendingLink,
         videoLengthSec: source?.videoLengthSec ?? null,
       });
       return;
     }
     if (!link.trim()) {
       setFormError(copy.missing);
-      hookInput.current?.focus();
+      pendingFocus.current = "hook";
       return;
     }
-    // Only a link: read it first. Review straight away when it gave us everything
-    // (a page's text, or a video's transcript); otherwise let the user fill the gaps.
-    const data = await fetchLink();
-    if (!data) return;
-    const complete = data.platform === "website" ? data.found.pageText : data.found.transcript;
-    if (complete && data.hook.trim()) {
+    // Read the link first. Review straight away when it gave us everything (a page's text,
+    // or a video's spoken transcript); otherwise let the user fill the gaps.
+    const ownHook = hook.trim() ? hook : undefined;
+    const data = await fetchLink({ keepHook: ownHook });
+    if (!data) {
+      setFormError("We couldn't read that link (the reason is under the link box). You can type the text below instead.");
+      pendingFocus.current = "link";
+      return;
+    }
+    if (isComplete(data)) {
       review({
         platform: data.platform,
         format: data.format,
@@ -198,6 +235,7 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
+              ref={linkInput}
               id="link"
               // type="text", not "url": a half-typed link must never block submitting the review itself
               type="text"
@@ -206,6 +244,9 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
               className="input flex-1"
               placeholder={copy.linkPlaceholder}
               value={link}
+              disabled={fetching || running}
+              aria-invalid={linkError ? true : undefined}
+              aria-describedby={linkError ? "link-error" : undefined}
               onChange={(e) => setLink(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -220,7 +261,7 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
           </div>
         </div>
         {linkError && (
-          <p className="text-sm text-red-600" role="alert">
+          <p id="link-error" className="text-sm text-red-600" role="alert">
             {linkError}
           </p>
         )}
@@ -234,13 +275,22 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
         {source && (
           <p className="break-all text-xs text-zinc-500">
             Source: {source.url}{" "}
-            <button type="button" className="text-violet-700 underline" onClick={() => setSource(null)}>
+            <button
+              type="button"
+              className="text-violet-700 underline"
+              onClick={() => {
+                setSource(null);
+                setLink(""); // otherwise the link still in the box would be sent as the source
+              }}
+            >
               remove
             </button>
           </p>
         )}
       </section>
 
+      {/* Locked while a link is being read, so nothing typed or picked meanwhile is lost or ignored. */}
+      <fieldset disabled={fetching || running} className="min-w-0 space-y-5">
       <section className="card grid gap-4 sm:grid-cols-3">
         <div>
           <label htmlFor="platform" className="label">
@@ -254,6 +304,7 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
               const p = e.target.value as Platform;
               setPlatform(p);
               setFormat(Object.keys(PLATFORMS[p].formats)[0]);
+              formatChosen.current = false;
               setFormError(null);
             }}
           >
@@ -268,7 +319,15 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
           <label htmlFor="format" className="label">
             {copy.formatLabel}
           </label>
-          <select id="format" className="input" value={format} onChange={(e) => setFormat(e.target.value)}>
+          <select
+            id="format"
+            className="input"
+            value={format}
+            onChange={(e) => {
+              setFormat(e.target.value);
+              formatChosen.current = true;
+            }}
+          >
             {Object.entries(formats).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
@@ -362,6 +421,7 @@ export default function NewReviewForm({ offers, defaultPlatform }: { offers: Off
           </div>
         )}
       </section>
+      </fieldset>
 
       {formError && (
         <p id="form-error" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">

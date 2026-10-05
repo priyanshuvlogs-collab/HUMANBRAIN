@@ -146,6 +146,7 @@ export function youtubeJson3ToText(json: unknown): string {
   return events
     .map((e) => (e.segs ?? []).map((s) => s.utf8 ?? "").join(""))
     .join(" ")
+    .replace(/\[[^\]]*\]/g, " ") // non-speech markers like [Music] or [Applause]
     .replace(/\s+/g, " ")
     .trim();
 }

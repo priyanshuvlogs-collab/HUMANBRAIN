@@ -114,6 +114,8 @@ describe("YouTube helpers", () => {
       "I made $4k in 30 days",
     );
     expect(youtubeJson3ToText(null)).toBe("");
+    expect(youtubeJson3ToText({ events: [{ segs: [{ utf8: "[Music]" }] }, { segs: [{ utf8: " [Applause] " }] }] })).toBe("");
+    expect(youtubeJson3ToText({ events: [{ segs: [{ utf8: "[Music] Stop scrolling" }] }] })).toBe("Stop scrolling");
   });
 });
 
