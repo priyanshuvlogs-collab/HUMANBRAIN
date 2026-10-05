@@ -78,7 +78,18 @@ ABOVE average reach, LOW confidence (no proof library yet). Most likely outcome:
     "rewrite": "Day 1 I had 312 followers and zero sales. Day 30: $4,200. The only thing I changed was posting 3 specific videos a week — here they are.",
     "why": "Adds a real starting point and a turn, which fixes the broken credibility step."
   },
-  "improved_cta": "Comment PLAN and I'll send you the exact 3-post template I used."
+  "improved_cta": "Comment PLAN and I'll send you the exact 3-post template I used.",
+  "full_rewrite": {
+    "hook": "I was making $0 from content. 30 days later: $4,200 — here's the screenshot.",
+    "script": "I was making $0 from content. 30 days later: $4,200. Here's the screenshot.\\n\\nI didn't post more. I posted less: 3 times a week, 10 minutes each, using one format.\\n\\nStep 1: open with the result your viewer wants.\\nStep 2: show one proof — a screenshot, a DM, a number.\\nStep 3: teach one small step they can try today.\\n\\nThe first week I made $180. By week four, my DMs were doing the selling.\\n\\nComment PLAN and I'll send you the exact 3-post template I used.",
+    "on_screen_text": "$0 → $4,200 in 30 days | 3 posts a week | 10 min each",
+    "changes": [
+      "Hook now opens with a before/after and promises proof, so skeptics stay",
+      "Added a real proof beat (screenshot + week-one number) where the original only claimed a result",
+      "Turned the method into 3 numbered steps so it's easy to follow and save",
+      "One CTA instead of two (follow + comment), tied to a specific lead magnet"
+    ]
+  }
 }
 \`\`\`
 `;

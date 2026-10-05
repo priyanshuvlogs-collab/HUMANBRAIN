@@ -114,13 +114,13 @@ isOneToOne: false
                   ]
                 },"posts": {
                   Row: {
-                    "created_at": string,"external_post_id": string | null,"format": string,"goal": string,"hook": string,"id": string,"offer_id": string | null,"on_screen_text": string,"platform": string,"posted_at": string | null,"root_post_id": string | null,"script": string,"source": string,"status": string,"user_id": string,"video_length_sec": number | null
+                    "created_at": string,"external_post_id": string | null,"format": string,"goal": string,"hook": string,"id": string,"offer_id": string | null,"on_screen_text": string,"platform": string,"posted_at": string | null,"root_post_id": string | null,"script": string,"source": string,"source_url": string | null,"status": string,"user_id": string,"video_length_sec": number | null
                   }
                   Insert: {
-                    "created_at"?: string,"external_post_id"?: string | null,"format": string,"goal": string,"hook": string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform": string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
+                    "created_at"?: string,"external_post_id"?: string | null,"format": string,"goal": string,"hook": string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform": string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"source_url"?: string | null,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
                   }
                   Update: {
-                    "created_at"?: string,"external_post_id"?: string | null,"format"?: string,"goal"?: string,"hook"?: string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform"?: string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
+                    "created_at"?: string,"external_post_id"?: string | null,"format"?: string,"goal"?: string,"hook"?: string,"id"?: string,"offer_id"?: string | null,"on_screen_text"?: string,"platform"?: string,"posted_at"?: string | null,"root_post_id"?: string | null,"script"?: string,"source"?: string,"source_url"?: string | null,"status"?: string,"user_id"?: string,"video_length_sec"?: number | null
                   }
                   Relationships: [
                     {

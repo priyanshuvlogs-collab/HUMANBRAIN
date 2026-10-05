@@ -381,6 +381,23 @@ describe.skipIf(!DB_URL)("database (local Supabase)", () => {
       }
     });
 
+    it("accepts website posts with a source link, and website averages", async () => {
+      const code = await pgCode(
+        asUser(pool, userA, async (c) => {
+          await c.query(
+            "insert into public.posts (platform, format, goal, hook, source_url) values ('website', 'sales_page', 'sales', 'Headline', 'https://mysite.com/offer')",
+          );
+          await c.query("insert into public.platform_averages (platform, avg_views) values ('website', 500) on conflict (user_id, platform) do update set avg_views = 500");
+          await c.query("update public.brand_settings set platforms = array['instagram','website'] where user_id = $1", [userA]);
+        }),
+      );
+      expect(code).toBe("ok");
+      const wrongFormat = await pgCode(
+        asUser(pool, userA, (c) => c.query("insert into public.posts (platform, format, goal, hook) values ('website', 'reel', 'views', 'x')")),
+      );
+      expect(wrongFormat).toBe("23514");
+    });
+
     it("signed-out visitors (anon) can't read results", async () => {
       const c = await pool.connect();
       try {

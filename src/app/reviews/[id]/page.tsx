@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import CopyButton from "@/components/CopyButton";
 import ConversionChain from "@/components/review/ConversionChain";
+import FullRewrite from "@/components/review/FullRewrite";
 import HookActions from "@/components/review/HookActions";
 import PersonaCard from "@/components/review/PersonaCard";
 import ScoreBars from "@/components/review/ScoreBars";
@@ -57,6 +58,14 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
           <time dateTime={review.created_at}>{new Date(review.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</time>
         </div>
         <p className="text-lg font-semibold leading-snug break-words text-zinc-900 sm:text-xl">“{post.hook}”</p>
+        {post.source_url && (
+          <p className="break-all text-xs text-zinc-500">
+            From:{" "}
+            <a href={post.source_url} target="_blank" rel="noopener noreferrer nofollow" className="text-violet-700 underline">
+              {post.source_url}
+            </a>
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <span className={`text-5xl font-bold tabular-nums ${scoreColor(total)}`}>{total}</span>
@@ -188,6 +197,17 @@ export default async function ReviewPage({ params }: PageProps<"/reviews/[id]">)
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-900">{view.rewrittenSection.rewrite}</p>
                 </div>
                 {view.rewrittenSection.why && <p className="text-xs text-zinc-600 md:col-span-2">{view.rewrittenSection.why}</p>}
+              </div>
+            </Section>
+          )}
+
+          {view.fullRewrite && (
+            <Section
+              title={post.platform === "website" ? "Full rewrite of the page" : "Full rewrite"}
+              subtitle="The whole piece rewritten with every fix applied. Re-review it to see the new score side by side."
+            >
+              <div className="card">
+                <FullRewrite postId={post.id} reviewId={review.id} rewrite={view.fullRewrite} />
               </div>
             </Section>
           )}

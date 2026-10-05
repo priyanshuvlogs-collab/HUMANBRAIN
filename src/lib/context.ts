@@ -144,17 +144,25 @@ export function buildPlaceholderValues(input: {
 /** The user message: the post itself, clearly labelled. */
 export function postMessage(post: PostInput, offerName: string | null): string {
   const goal = GOALS[post.goal as keyof typeof GOALS] ?? post.goal;
+  const isPage = post.platform === "website";
   return [
-    "POST TO REVIEW",
+    isPage ? "PAGE TO REVIEW" : "POST TO REVIEW",
     `Platform: ${platformLabel(post.platform)}`,
     `Format: ${formatLabel(post.platform, post.format)}`,
     `Goal: ${goal}`,
     `Offer: ${offerName ?? "none"}`,
+    ...(isPage
+      ? [
+          "",
+          "This is a web page (landing or sales page), not a social post. Read it the same way: the headline is the hook,",
+          "the page copy is the script, and each persona is a visitor arriving from a link who decides in seconds whether to keep reading.",
+        ]
+      : []),
     "",
-    "Hook (first line / first 3 seconds):",
+    isPage ? "Headline (what a visitor sees first):" : "Hook (first line / first 3 seconds):",
     post.hook.trim(),
     "",
-    "Script / caption:",
+    isPage ? "Page copy:" : "Script / caption:",
     post.script.trim() || "(none)",
     "",
     "On-screen text:",
