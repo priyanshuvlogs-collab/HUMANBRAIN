@@ -146,6 +146,10 @@ const PLATFORM_ALIASES: Record<string, Platform> = {
   yt: "youtube",
   ytshorts: "youtube",
   shorts: "youtube",
+  website: "website",
+  web: "website",
+  site: "website",
+  landingpage: "website",
 };
 
 const FORMAT_ALIASES: Record<Platform, Record<string, string>> = {
@@ -173,10 +177,11 @@ const FORMAT_ALIASES: Record<Platform, Record<string, string>> = {
     slideshow: "carousel",
   },
   youtube: { short: "short", shorts: "short", video: "short" },
+  website: { landingpage: "landing_page", landing: "landing_page", page: "landing_page", salespage: "sales_page", sales: "sales_page" },
 };
 
 /** Blank format → the platform's main video format. */
-const DEFAULT_FORMAT: Record<Platform, string> = { instagram: "reel", tiktok: "video", youtube: "short" };
+const DEFAULT_FORMAT: Record<Platform, string> = { instagram: "reel", tiktok: "video", youtube: "short", website: "landing_page" };
 
 const GOAL_ALIASES: Record<string, Goal> = {
   view: "views",
@@ -231,7 +236,7 @@ export function validateCsvRow(
   const errors: string[] = [];
 
   const platform = PLATFORM_ALIASES[key(raw.platform)];
-  if (!platform) errors.push(str(raw.platform) ? `Unknown platform "${str(raw.platform)}" (use instagram, tiktok or youtube).` : "Platform is missing.");
+  if (!platform) errors.push(str(raw.platform) ? `Unknown platform "${str(raw.platform)}" (use instagram, tiktok, youtube or website).` : "Platform is missing.");
 
   let format = "";
   if (platform) {

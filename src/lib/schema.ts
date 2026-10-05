@@ -195,6 +195,20 @@ const rawReviewSchema = z.object({
     .catch(null)
     .optional(),
   improved_cta: text.optional(),
+  // App add-on (prompts/full-rewrite.md). Optional: older reviews and imperfect replies simply lack it.
+  full_rewrite: z
+    .object({
+      hook: text,
+      script: text,
+      on_screen_text: text.optional(),
+      changes: z
+        .preprocess((v) => (typeof v === "string" ? [v] : v), z.array(text))
+        .transform((items) => items.map((i) => i.trim()).filter(Boolean))
+        .catch([]),
+    })
+    .nullable()
+    .catch(null)
+    .optional(),
 });
 
 // ---- stable shape the UI uses -------------------------------------------------
@@ -230,6 +244,8 @@ export type ReviewView = {
   alternativeHooks: string[];
   rewrittenSection: { section: string; original: string; rewrite: string; why: string } | null;
   improvedCta: string;
+  /** Missing on reviews saved before the full-rewrite add-on. */
+  fullRewrite?: { hook: string; script: string; onScreenText: string; changes: string[] } | null;
 };
 
 export const reviewSchema = rawReviewSchema.transform((r): ReviewView => {
@@ -268,6 +284,15 @@ export const reviewSchema = rawReviewSchema.transform((r): ReviewView => {
         ? r.rewritten_section
         : null,
     improvedCta: r.improved_cta ?? "",
+    fullRewrite:
+      r.full_rewrite && r.full_rewrite.script.trim()
+        ? {
+            hook: r.full_rewrite.hook.trim(),
+            script: r.full_rewrite.script.trim(),
+            onScreenText: (r.full_rewrite.on_screen_text ?? "").trim(),
+            changes: r.full_rewrite.changes,
+          }
+        : null,
   };
 });
 

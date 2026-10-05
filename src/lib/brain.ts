@@ -14,7 +14,7 @@ export const PLACEHOLDERS = [
 export type Placeholder = (typeof PLACEHOLDERS)[number];
 export type PlaceholderValues = Record<Placeholder, string>;
 
-export type BrainFiles = { brain: string; provisionalFormat: string };
+export type BrainFiles = { brain: string; provisionalFormat: string; fullRewrite?: string };
 
 const PROMPTS_DIR = path.join(process.cwd(), "prompts");
 let cached: BrainFiles | null = null;
@@ -25,11 +25,12 @@ let cached: BrainFiles | null = null;
  */
 export async function loadBrainFiles(): Promise<BrainFiles> {
   if (cached && process.env.NODE_ENV === "production") return cached;
-  const [brain, provisionalFormat] = await Promise.all([
+  const [brain, provisionalFormat, fullRewrite] = await Promise.all([
     readFile(path.join(PROMPTS_DIR, "offer-brain-system.md"), "utf8"),
     readFile(path.join(PROMPTS_DIR, "provisional-output-format.md"), "utf8").catch(() => ""),
+    readFile(path.join(PROMPTS_DIR, "full-rewrite.md"), "utf8").catch(() => ""),
   ]);
-  cached = { brain, provisionalFormat };
+  cached = { brain, provisionalFormat, fullRewrite };
   return cached;
 }
 
@@ -74,6 +75,8 @@ export function buildSystemPrompt(files: BrainFiles, values: PlaceholderValues) 
 
   const provisional = needsProvisionalFormat(files.brain) && files.provisionalFormat.trim() !== "";
   if (provisional) prompt = `${prompt.trimEnd()}\n\n${files.provisionalFormat.trim()}\n`;
+  // The app's own add-on (asks for a complete rewritten script); the brain text itself is never changed.
+  if (files.fullRewrite?.trim()) prompt = `${prompt.trimEnd()}\n\n${files.fullRewrite.trim()}\n`;
 
   return { prompt, provisional, version: brainVersion(files.brain) };
 }

@@ -4,6 +4,8 @@ export const PLATFORMS = {
   instagram: { label: "Instagram", formats: { reel: "Reel", carousel: "Carousel", post: "Post", story: "Story" } },
   tiktok: { label: "TikTok", formats: { video: "Video", carousel: "Carousel" } },
   youtube: { label: "YouTube Shorts", formats: { short: "Short" } },
+  // A landing or sales page, reviewed like a post: headline = hook, page copy = script.
+  website: { label: "Website", formats: { landing_page: "Landing page", sales_page: "Sales page" } },
 } as const;
 
 export type Platform = keyof typeof PLATFORMS;

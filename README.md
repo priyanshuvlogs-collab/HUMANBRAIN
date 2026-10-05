@@ -39,7 +39,7 @@ Pick **one** option.
 **Option A: copy and paste (easiest)**
 1. In Supabase, open **SQL Editor** → **New query**.
 2. Open `supabase/migrations/20261003000000_init.sql` from this project, copy **everything**, paste it in, and click **Run**.
-3. Do the same with every other file in `supabase/migrations/`, **in name order** (the date in the name): `20261004000000_results_learning.sql`, then `20261004120000_phase2_hardening.sql`. When you update the app later, run only the new files.
+3. Do the same with every other file in `supabase/migrations/`, **in name order** (the date in the name): `20261004000000_results_learning.sql`, then `20261004120000_phase2_hardening.sql`, then `20261005000000_links_website.sql`. When you update the app later, run only the new files.
 
 **Option B: command line**
 ```bash
@@ -136,6 +136,16 @@ New Review form ──► /api/review ──► Claude ──► JSON check (zod
 5. **Re-review:** on the results page, pick an alternative hook (or write your own). The same post is reviewed again with that hook, and the two versions open side by side.
 
 **Why does a review say "Low confidence"?** The brain is told to use LOW confidence when your proof library (past posts with real results) is empty or thin. Log results or import past posts and it improves.
+
+### Review from a link, and full rewrites
+
+- **Start from a link** (New review): paste a YouTube, TikTok or Instagram post, or any web page.
+  - **YouTube:** title, description and, when the video has captions, the full transcript.
+  - **TikTok / Instagram:** the caption only. Neither shares what's said in the video, so paste your spoken script under it.
+  - **Websites** (landing or sales pages): the headline becomes the hook and the page copy the script. They're reviewed as a "Website" platform.
+- Claude can't watch or hear video, so the review is only as good as the words you give it. Check the filled-in fields before you review.
+- The server only fetches public addresses (never localhost or private networks), follows at most 4 redirects, and reads at most 3 MB.
+- **Full rewrite:** every review now ends with the whole script (or page) rewritten with every fix applied, plus a list of what changed and why. **Re-review this rewrite** scores it and opens it side by side with the original. This comes from `prompts/full-rewrite.md`, which the app appends after the brain. The brain file itself is unchanged.
 
 ### Real results, Performance Index and learning
 

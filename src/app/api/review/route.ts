@@ -24,10 +24,19 @@ const newReviewBody = z
     hook: hookField,
     script: z.string().max(10_000, "The script is too long (max 10,000 characters).").default(""),
     onScreenText: z.string().max(2_000, "On-screen text is too long (max 2,000 characters).").default(""),
+    // Set when the form was filled from a link.
+    sourceUrl: z.url({ protocol: /^https?$/, error: "Invalid source link." }).max(2000).nullable().optional(),
+    videoLengthSec: z.number().int().positive().max(36_000).nullable().optional(),
   })
   .refine((b) => isValidFormat(b.platform, b.format), { message: "Pick a format for this platform.", path: ["format"] });
 
-const reReviewBody = z.object({ fromPostId: z.uuid(), hook: hookField });
+// Re-review an existing post with a new hook — and optionally a whole new script (e.g. the full rewrite).
+const reReviewBody = z.object({
+  fromPostId: z.uuid(),
+  hook: hookField,
+  script: z.string().max(10_000, "The script is too long (max 10,000 characters).").optional(),
+  onScreenText: z.string().max(2_000, "On-screen text is too long (max 2,000 characters).").optional(),
+});
 
 function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -46,7 +55,7 @@ export async function POST(request: Request) {
   }
 
   // ---- 1. Work out which post we're reviewing -----------------------------------
-  let post: PostInput & { offerId: string | null };
+  let post: PostInput & { offerId: string | null; sourceUrl: string | null; videoLengthSec: number | null };
   let rootPostId: string | null = null;
 
   if (body && typeof body === "object" && "fromPostId" in body) {
@@ -59,15 +68,22 @@ export async function POST(request: Request) {
       format: source.format,
       goal: source.goal,
       hook: parsed.data.hook,
-      script: source.script,
-      onScreenText: source.on_screen_text,
+      script: parsed.data.script ?? source.script,
+      onScreenText: parsed.data.onScreenText ?? source.on_screen_text,
       offerId: source.offer_id,
+      sourceUrl: source.source_url,
+      videoLengthSec: source.video_length_sec,
     };
     rootPostId = source.root_post_id ?? source.id;
   } else {
     const parsed = newReviewBody.safeParse(body);
     if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid request.", 400);
-    post = { ...parsed.data, offerId: parsed.data.offerId ?? null };
+    post = {
+      ...parsed.data,
+      offerId: parsed.data.offerId ?? null,
+      sourceUrl: parsed.data.sourceUrl ?? null,
+      videoLengthSec: parsed.data.videoLengthSec ?? null,
+    };
   }
 
   // ---- 2. Load everything the brain needs (all through RLS = only this user's rows) ----
@@ -142,6 +158,8 @@ export async function POST(request: Request) {
       on_screen_text: post.onScreenText,
       offer_id: post.offerId,
       root_post_id: rootPostId,
+      source_url: post.sourceUrl,
+      video_length_sec: post.videoLengthSec,
     })
     .select("id")
     .single();
